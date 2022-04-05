@@ -1,0 +1,2439 @@
+AWSTemplateFormatVersion: '2010-09-09'
+Transform: AWS::Serverless-2016-10-31
+Description: 'Serverless SaaS Reference Architecture
+
+  '
+Globals:
+  Function:
+    Timeout: 29
+    Layers:
+    - Fn::Sub: arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14
+    Environment:
+      Variables:
+        LOG_LEVEL: DEBUG
+        POWERTOOLS_METRICS_NAMESPACE: ServerlessSaaS
+Parameters:
+  TenantIdParameter:
+    Type: String
+    Default: pooled
+    Description: Tenant ID for the stack
+  CognitoUserPoolIdParameter:
+    Type: String
+    Description: User Pool Id For Tenant
+  CognitoAppClientIdParameter:
+    Type: String
+    Description: App Client Id for Tenant
+  StageName:
+    Type: String
+    Default: prod
+    Description: Stage Name for the api
+  BootstrapStackName:
+    Type: String
+    Default: serverless-saas
+    Description: Name of the bootstrap stack
+  LambdaReserveConcurrency:
+    Type: Number
+    Default: 20
+    Description: Reserve concurrency for lambda function. You can customize this on
+      per tenant basis, if needed, by storing in the tenant table
+  LambdaCanaryDeploymentPreference:
+    Type: String
+    Default: 'True'
+    Description: Pass it as False if you want to disable the canary release for Lambda
+      and don't want to wait for 5 mins to complete the release
+Conditions:
+  IsPooledDeploy:
+    Fn::Equals:
+    - Ref: TenantIdParameter
+    - pooled
+  IsSiloDeploy:
+    Fn::Not:
+    - Fn::Equals:
+      - Ref: TenantIdParameter
+      - pooled
+Resources:
+  ServerlessSaaSLayers:
+    Type: AWS::Serverless::LayerVersion
+    Properties:
+      LayerName:
+        Fn::Join:
+        - '-'
+        - - serverless-saas-dependencies
+          - Ref: TenantIdParameter
+      Description: Utilities for project
+      ContentUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/a15dd2b3403804d42adad3148d53aa77
+      CompatibleRuntimes:
+      - python3.8
+      LicenseInfo: MIT
+      RetentionPolicy: Retain
+    Metadata:
+      BuildMethod: python3.8
+      SamResourceId: ServerlessSaaSLayers
+  ProductTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: shardId
+        AttributeType: S
+      - AttributeName: productId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: shardId
+        KeyType: HASH
+      - AttributeName: productId
+        KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName:
+        Fn::Join:
+        - '-'
+        - - Product
+          - Ref: TenantIdParameter
+      Tags:
+      - Key: TenantId
+        Value:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: ProductTable
+  OrderTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: shardId
+        AttributeType: S
+      - AttributeName: orderId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: shardId
+        KeyType: HASH
+      - AttributeName: orderId
+        KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName:
+        Fn::Join:
+        - '-'
+        - - Order
+          - Ref: TenantIdParameter
+      Tags:
+      - Key: TenantId
+        Value:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: OrderTable
+  ArtifactTable:
+    Type: AWS::DynamoDB::Table
+    Properties:
+      AttributeDefinitions:
+      - AttributeName: shardId
+        AttributeType: S
+      - AttributeName: artifactId
+        AttributeType: S
+      KeySchema:
+      - AttributeName: shardId
+        KeyType: HASH
+      - AttributeName: artifactId
+        KeyType: RANGE
+      ProvisionedThroughput:
+        ReadCapacityUnits: 5
+        WriteCapacityUnits: 5
+      TableName:
+        Fn::Join:
+        - '-'
+        - - Artifact
+          - Ref: TenantIdParameter
+      Tags:
+      - Key: TenantId
+        Value:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: ArtifactTable
+  ProductFunctionExecutionRolePolicy:
+    Condition: IsSiloDeploy
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - product-function-policy
+      Roles:
+      - Ref: ProductFunctionExecutionRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:PutItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          Resource:
+          - Fn::GetAtt:
+            - ProductTable
+            - Arn
+    Metadata:
+      SamResourceId: ProductFunctionExecutionRolePolicy
+  ProductFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - product-function-execution-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+    Metadata:
+      SamResourceId: ProductFunctionExecutionRole
+  GetProductFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ProductFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/460ba3befe17d7033d54520e034b641a
+      Handler: product_service.get_product
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ProductFunctionExecutionRole
+        - Arn
+      ReservedConcurrentExecutions:
+        Fn::If:
+        - IsPooledDeploy
+        - Ref: AWS::NoValue
+        - Ref: LambdaReserveConcurrency
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ProductService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          PRODUCT_TABLE_NAME:
+            Ref: ProductTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: GetProductFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: GetProductFunction
+  GetProductFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${GetProductFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: GetProductFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - GetProductFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: GetProductFunctionCanaryErrorsAlarm
+  GetProductsFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ProductFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/460ba3befe17d7033d54520e034b641a
+      Handler: product_service.get_products
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ProductFunctionExecutionRole
+        - Arn
+      ReservedConcurrentExecutions:
+        Fn::If:
+        - IsPooledDeploy
+        - Ref: AWS::NoValue
+        - Ref: LambdaReserveConcurrency
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ProductService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          PRODUCT_TABLE_NAME:
+            Ref: ProductTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: GetProductsFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: GetProductsFunction
+  GetProductsFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${GetProductsFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: GetProductsFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - GetProductsFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: GetProductsFunctionCanaryErrorsAlarm
+  CreateProductFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ProductFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/460ba3befe17d7033d54520e034b641a
+      Handler: product_service.create_product
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ProductFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ProductService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          PRODUCT_TABLE_NAME:
+            Ref: ProductTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: CreateProductFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: CreateProductFunction
+  CreateProductFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${CreateProductFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: CreateProductFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - CreateProductFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: CreateProductFunctionCanaryErrorsAlarm
+  UpdateProductFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ProductFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/460ba3befe17d7033d54520e034b641a
+      Handler: product_service.update_product
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ProductFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ProductService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          PRODUCT_TABLE_NAME:
+            Ref: ProductTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: UpdateProductFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: UpdateProductFunction
+  UpdateProductFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${UpdateProductFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: UpdateProductFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - UpdateProductFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: UpdateProductFunctionCanaryErrorsAlarm
+  DeleteProductFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ProductFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/460ba3befe17d7033d54520e034b641a
+      Handler: product_service.delete_product
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ProductFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ProductService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          PRODUCT_TABLE_NAME:
+            Ref: ProductTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: DeleteProductFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: DeleteProductFunction
+  DeleteProductFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${DeleteProductFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: DeleteProductFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - DeleteProductFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: DeleteProductFunctionCanaryErrorsAlarm
+  OrderFunctionExecutionRolePolicy:
+    Condition: IsSiloDeploy
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - order-function-policy
+      Roles:
+      - Ref: OrderFunctionExecutionRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:PutItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          Resource:
+          - Fn::GetAtt:
+            - OrderTable
+            - Arn
+    Metadata:
+      SamResourceId: OrderFunctionExecutionRolePolicy
+  OrderFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - order-function-execution-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+    Metadata:
+      SamResourceId: OrderFunctionExecutionRole
+  GetOrdersFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: OrderFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/0c9e83f8479150e5ec4125972fa413e6
+      Handler: order_service.get_orders
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - OrderFunctionExecutionRole
+        - Arn
+      ReservedConcurrentExecutions:
+        Fn::If:
+        - IsPooledDeploy
+        - Ref: AWS::NoValue
+        - Ref: LambdaReserveConcurrency
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: OrderService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ORDER_TABLE_NAME:
+            Ref: OrderTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: GetOrdersFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: GetOrdersFunction
+  GetOrdersFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${GetOrdersFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: GetOrdersFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - GetOrdersFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: GetOrdersFunctionCanaryErrorsAlarm
+  GetOrderFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: OrderFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/0c9e83f8479150e5ec4125972fa413e6
+      Handler: order_service.get_order
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - OrderFunctionExecutionRole
+        - Arn
+      ReservedConcurrentExecutions:
+        Fn::If:
+        - IsPooledDeploy
+        - Ref: AWS::NoValue
+        - Ref: LambdaReserveConcurrency
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: OrderService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ORDER_TABLE_NAME:
+            Ref: OrderTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: GetOrderFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: GetOrderFunction
+  GetOrderFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${GetOrderFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: GetOrderFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - GetOrderFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: GetOrderFunctionCanaryErrorsAlarm
+  CreateOrderFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: OrderFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/0c9e83f8479150e5ec4125972fa413e6
+      Handler: order_service.create_order
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - OrderFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: OrderService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ORDER_TABLE_NAME:
+            Ref: OrderTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: CreateOrderFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: CreateOrderFunction
+  CreateOrderFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${CreateOrderFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: CreateOrderFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - CreateOrderFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: CreateOrderFunctionCanaryErrorsAlarm
+  UpdateOrderFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: OrderFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/0c9e83f8479150e5ec4125972fa413e6
+      Handler: order_service.update_order
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - OrderFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: OrderService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ORDER_TABLE_NAME:
+            Ref: OrderTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: UpdateOrderFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: UpdateOrderFunction
+  UpdateOrderFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${UpdateOrderFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: UpdateOrderFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - UpdateOrderFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: UpdateOrderFunctionCanaryErrorsAlarm
+  DeleteOrderFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: OrderFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/0c9e83f8479150e5ec4125972fa413e6
+      Handler: order_service.delete_order
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - OrderFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: OrderService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ORDER_TABLE_NAME:
+            Ref: OrderTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: DeleteOrderFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: DeleteOrderFunction
+  DeleteOrderFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${DeleteOrderFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: DeleteOrderFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - DeleteOrderFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: DeleteOrderFunctionCanaryErrorsAlarm
+  ArtifactFunctionExecutionRolePolicy:
+    Condition: IsSiloDeploy
+    Type: AWS::IAM::Policy
+    Properties:
+      PolicyName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - artifact-function-policy
+      Roles:
+      - Ref: ArtifactFunctionExecutionRole
+      PolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Action:
+          - dynamodb:GetItem
+          - dynamodb:UpdateItem
+          - dynamodb:PutItem
+          - dynamodb:DeleteItem
+          - dynamodb:Query
+          Resource:
+          - Fn::GetAtt:
+            - ArtifactTable
+            - Arn
+    Metadata:
+      SamResourceId: ArtifactFunctionExecutionRolePolicy
+  ArtifactFunctionExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - art-function-execution-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+    Metadata:
+      SamResourceId: ArtifactFunctionExecutionRole
+  GetArtifactFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ArtifactFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/7d70dac9710ecc0b3c99a849bfc77501
+      Handler: artifact_service.get_artifact
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ArtifactFunctionExecutionRole
+        - Arn
+      ReservedConcurrentExecutions:
+        Fn::If:
+        - IsPooledDeploy
+        - Ref: AWS::NoValue
+        - Ref: LambdaReserveConcurrency
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ArtifactService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ARTIFACT_TABLE_NAME:
+            Ref: ArtifactTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: GetArtifactFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: GetArtifactFunction
+  GetArtifactFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${GetArtifactFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: GetArtifactFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - GetArtifactFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: GetArtifactFunctionCanaryErrorsAlarm
+  GetArtifactsFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ArtifactFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/7d70dac9710ecc0b3c99a849bfc77501
+      Handler: artifact_service.get_artifacts
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ArtifactFunctionExecutionRole
+        - Arn
+      ReservedConcurrentExecutions:
+        Fn::If:
+        - IsPooledDeploy
+        - Ref: AWS::NoValue
+        - Ref: LambdaReserveConcurrency
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ArtifactService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ARTIFACT_TABLE_NAME:
+            Ref: ArtifactTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: GetArtifactsFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: GetArtifactsFunction
+  GetArtifactsFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${GetArtifactsFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: GetArtifactsFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - GetArtifactsFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: GetArtifactsFunctionCanaryErrorsAlarm
+  CreateArtifactFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ArtifactFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/7d70dac9710ecc0b3c99a849bfc77501
+      Handler: artifact_service.create_artifact
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ArtifactFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ArtifactService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ARTIFACT_TABLE_NAME:
+            Ref: ArtifactTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: CreateArtifactFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: CreateArtifactFunction
+  CreateArtifactFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${CreateArtifactFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: CreateArtifactFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - CreateArtifactFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: CreateArtifactFunctionCanaryErrorsAlarm
+  UpdateArtifactFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ArtifactFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/7d70dac9710ecc0b3c99a849bfc77501
+      Handler: artifact_service.update_artifact
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ArtifactFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ArtifactService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ARTIFACT_TABLE_NAME:
+            Ref: ArtifactTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: UpdateArtifactFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: UpdateArtifactFunction
+  UpdateArtifactFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${UpdateArtifactFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: UpdateArtifactFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - UpdateArtifactFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: UpdateArtifactFunctionCanaryErrorsAlarm
+  DeleteArtifactFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: ArtifactFunctionExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/7d70dac9710ecc0b3c99a849bfc77501
+      Handler: artifact_service.delete_artifact
+      Runtime: python3.8
+      Tracing: Active
+      Role:
+        Fn::GetAtt:
+        - ArtifactFunctionExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+      Environment:
+        Variables:
+          POWERTOOLS_SERVICE_NAME: ArtifactService
+          IS_POOLED_DEPLOY:
+            Fn::If:
+            - IsPooledDeploy
+            - true
+            - false
+          ARTIFACT_TABLE_NAME:
+            Ref: ArtifactTable
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled:
+          Ref: LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+        - Ref: DeleteArtifactFunctionCanaryErrorsAlarm
+      Tags:
+        TenantId:
+          Ref: TenantIdParameter
+    Metadata:
+      SamResourceId: DeleteArtifactFunction
+  DeleteArtifactFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+      - Name: Resource
+        Value:
+          Fn::Sub: ${DeleteArtifactFunction}:live
+      - Name: FunctionName
+        Value:
+          Ref: DeleteArtifactFunction
+      - Name: ExecutedVersion
+        Value:
+          Fn::GetAtt:
+          - DeleteArtifactFunction
+          - Version.Version
+    Metadata:
+      SamResourceId: DeleteArtifactFunctionCanaryErrorsAlarm
+  ApiGatewayAccessLogs:
+    Type: AWS::Logs::LogGroup
+    Properties:
+      LogGroupName:
+        Fn::Join:
+        - '-'
+        - - /aws/api-gateway/access-logs-serverless-saas-tenant-api-
+          - Ref: TenantIdParameter
+      RetentionInDays: 30
+    Metadata:
+      SamResourceId: ApiGatewayAccessLogs
+  ApiGatewayTenantApi:
+    Type: AWS::Serverless::Api
+    Properties:
+      MethodSettings:
+      - DataTraceEnabled: false
+        LoggingLevel: INFO
+        MetricsEnabled: true
+        ResourcePath: /*
+        HttpMethod: '*'
+      AccessLogSetting:
+        DestinationArn:
+          Fn::GetAtt:
+          - ApiGatewayAccessLogs
+          - Arn
+        Format: '{ "requestId":"$context.requestId", "ip": "$context.identity.sourceIp",
+          "caller":"$context.identity.caller", "user":"$context.identity.user","requestTime":"$context.requestTime",
+          "httpMethod":"$context.httpMethod","resourcePath":"$context.resourcePath",
+          "status":"$context.status","protocol":"$context.protocol", "responseLength":"$context.responseLength"
+          }'
+      TracingEnabled: true
+      DefinitionBody:
+        openapi: 3.0.1
+        info:
+          title:
+            Fn::Join:
+            - '-'
+            - - Ref: TenantIdParameter
+              - serverless-saas-tenant-api
+        basePath:
+          Fn::Join:
+          - ''
+          - - /
+            - Ref: StageName
+        x-amazon-apigateway-api-key-source: AUTHORIZER
+        schemes:
+        - https
+        paths:
+          /order/{id}:
+            get:
+              summary: Returns a order
+              description: Return a order by a order id.
+              produces:
+              - application/json
+              parameters:
+              - name: id
+                in: path
+                required: true
+                type: string
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - GetOrderFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            put:
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - UpdateOrderFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            delete:
+              summary: Deletes a order
+              description: Deletes a order by a order id.
+              produces:
+              - application/json
+              parameters:
+              - name: id
+                in: path
+                required: true
+                type: string
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - DeleteOrderFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /orders:
+            get:
+              summary: Returns all orders
+              description: Returns all orders.
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - GetOrdersFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /order:
+            post:
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - CreateOrderFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /product/{id}:
+            get:
+              summary: Returns a product
+              description: Return a product by a product id.
+              produces:
+              - application/json
+              parameters:
+              - name: id
+                in: path
+                required: true
+                type: string
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - GetProductFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            put:
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - UpdateProductFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            delete:
+              summary: Deletes a product
+              description: Deletes a product by a product id.
+              produces:
+              - application/json
+              parameters:
+              - name: id
+                in: path
+                required: true
+                type: string
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - DeleteProductFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /products:
+            get:
+              summary: Returns all products
+              description: Returns all products.
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - GetProductsFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /product:
+            post:
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - CreateProductFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /artifact/{id}:
+            get:
+              summary: Returns a artifact
+              description: Return a artifact by a artifact id.
+              produces:
+              - application/json
+              parameters:
+              - name: id
+                in: path
+                required: true
+                type: string
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - GetArtifactFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            put:
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - UpdateArtifactFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            delete:
+              summary: Deletes a artifact
+              description: Deletes a artifact by a artifact id.
+              produces:
+              - application/json
+              parameters:
+              - name: id
+                in: path
+                required: true
+                type: string
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - DeleteArtifactFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /artifacts:
+            get:
+              summary: Returns all artifacts
+              description: Returns all artifacts.
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - GetArtifactsFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+          /artifact:
+            post:
+              produces:
+              - application/json
+              responses: {}
+              security:
+              - api_key: []
+              - Authorizer: []
+              x-amazon-apigateway-integration:
+                uri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::GetAtt:
+                      - CreateArtifactFunction
+                      - Arn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy
+            options:
+              consumes:
+              - application/json
+              produces:
+              - application/json
+              responses:
+                '200':
+                  description: 200 response
+                  schema:
+                    $ref: '#/definitions/Empty'
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: '''DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'''
+                      method.response.header.Access-Control-Allow-Headers: '''Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'''
+                      method.response.header.Access-Control-Allow-Origin: '''*'''
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock
+        components:
+          securitySchemes:
+            api_key:
+              type: apiKey
+              name: x-api-key
+              in: header
+            Authorizer:
+              type: apiKey
+              name: Authorization
+              in: header
+              x-amazon-apigateway-authtype: custom
+              x-amazon-apigateway-authorizer:
+                authorizerUri:
+                  Fn::Join:
+                  - ''
+                  - - Fn::Sub: arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    - Fn::ImportValue: Serverless-SaaS-AuthorizerFunctionArn
+                    - /invocations
+                authorizerResultTtlInSeconds: 30
+                type: token
+      StageName:
+        Ref: StageName
+    Metadata:
+      SamResourceId: ApiGatewayTenantApi
+  GetProductsLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetProductsFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: GetProductsLambdaApiGatewayExecutionPermission
+  GetProductLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetProductFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: GetProductLambdaApiGatewayExecutionPermission
+  CreateProductLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - CreateProductFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: CreateProductLambdaApiGatewayExecutionPermission
+  UpdateProductLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - UpdateProductFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: UpdateProductLambdaApiGatewayExecutionPermission
+  DeleteProductLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - DeleteProductFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: DeleteProductLambdaApiGatewayExecutionPermission
+  GetOrdersLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetOrdersFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: GetOrdersLambdaApiGatewayExecutionPermission
+  GetOrderLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetOrderFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: GetOrderLambdaApiGatewayExecutionPermission
+  CreateOrderLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - CreateOrderFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: CreateOrderLambdaApiGatewayExecutionPermission
+  UpdateOrderLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - UpdateOrderFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: UpdateOrderLambdaApiGatewayExecutionPermission
+  DeleteOrderLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - DeleteOrderFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: DeleteOrderLambdaApiGatewayExecutionPermission
+  GetArtifactsLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetArtifactsFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: GetArtifactsLambdaApiGatewayExecutionPermission
+  GetArtifactLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - GetArtifactFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: GetArtifactLambdaApiGatewayExecutionPermission
+  CreateArtifactLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - CreateArtifactFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: CreateArtifactLambdaApiGatewayExecutionPermission
+  UpdateArtifactLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - UpdateArtifactFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: UpdateArtifactLambdaApiGatewayExecutionPermission
+  DeleteArtifactLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::GetAtt:
+        - DeleteArtifactFunction
+        - Arn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*/*
+    Metadata:
+      SamResourceId: DeleteArtifactLambdaApiGatewayExecutionPermission
+  AuthorizerLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName:
+        Fn::ImportValue: Serverless-SaaS-AuthorizerFunctionArn
+      Principal: apigateway.amazonaws.com
+      SourceArn:
+        Fn::Join:
+        - ''
+        - - 'arn:aws:execute-api:'
+          - Ref: AWS::Region
+          - ':'
+          - Ref: AWS::AccountId
+          - ':'
+          - Ref: ApiGatewayTenantApi
+          - /*/*
+    Metadata:
+      SamResourceId: AuthorizerLambdaApiGatewayExecutionPermission
+  UpdateUsagePlanLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn: ApiGatewayTenantApi
+    Properties:
+      RoleName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - update-usage-plan-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+      Policies:
+      - PolicyName:
+          Fn::Join:
+          - '-'
+          - - Ref: TenantIdParameter
+            - update-usage-plan-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - kms:Decrypt
+            Resource:
+              Fn::Sub: arn:aws:kms:${AWS::Region}:${AWS::AccountId}:key/*
+          - Effect: Allow
+            Action:
+            - logs:CreateLogGroup
+            - logs:PutLogEvents
+            - logs:CreateLogStream
+            Resource:
+              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:*
+          - Effect: Allow
+            Action:
+            - logs:DescribeLogStreams
+            Resource:
+              Fn::Sub: arn:aws:logs:${AWS::Region}:${AWS::AccountId}:log-group:*
+          - Effect: Allow
+            Action:
+            - xray:PutTraceSegments
+            - xray:PutTelemetryRecords
+            Resource: '*'
+          - Effect: Allow
+            Action:
+            - apigateway:PATCH
+            Resource:
+              Fn::Sub: arn:aws:apigateway:${AWS::Region}::/usageplans/*
+          - Effect: Allow
+            Action:
+            - dynamodb:GetItem
+            Resource:
+              Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ServerlessSaaS-Settings
+    Metadata:
+      SamResourceId: UpdateUsagePlanLambdaExecutionRole
+  UpdateUsagePlanFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: UpdateUsagePlanLambdaExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/1903dce02364ee21db9a5104d7e9e07d
+      Handler: update_usage_plan.handler
+      Runtime: python3.8
+      Role:
+        Fn::GetAtt:
+        - UpdateUsagePlanLambdaExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+    Metadata:
+      SamResourceId: UpdateUsagePlanFunction
+  AssociateUsagePlanWithTenantAPI:
+    Type: Custom::AssociateUsagePlanWithTenantAPI
+    DependsOn: UpdateUsagePlanFunction
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - UpdateUsagePlanFunction
+        - Arn
+      ApiGatewayId:
+        Ref: ApiGatewayTenantApi
+      SettingsTableName: ServerlessSaaS-Settings
+      IsPooledDeploy:
+        Fn::If:
+        - IsPooledDeploy
+        - true
+        - false
+      Stage:
+        Ref: StageName
+      UsagePlanBasicTier:
+        Fn::ImportValue: Serverless-SaaS-UsagePlanBasicTier
+      UsagePlanStandardTier:
+        Fn::ImportValue: Serverless-SaaS-UsagePlanStandardTier
+      UsagePlanPremiumTier:
+        Fn::ImportValue: Serverless-SaaS-UsagePlanPremiumTier
+      UsagePlanPlatinumTier:
+        Fn::ImportValue: Serverless-SaaS-UsagePlanPlatinumTier
+    Metadata:
+      SamResourceId: AssociateUsagePlanWithTenantAPI
+  UpdateTenantApiGatewayUrlLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    DependsOn: ApiGatewayTenantApi
+    Properties:
+      RoleName:
+        Fn::Join:
+        - '-'
+        - - Ref: TenantIdParameter
+          - apigwurl-lambda-exec-role
+      Path: /
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+        - Effect: Allow
+          Principal:
+            Service:
+            - lambda.amazonaws.com
+          Action:
+          - sts:AssumeRole
+      ManagedPolicyArns:
+      - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy
+      - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+      - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+      - PolicyName:
+          Fn::Join:
+          - '-'
+          - - Ref: TenantIdParameter
+            - apigwurl-lambda-exe-policy
+        PolicyDocument:
+          Version: 2012-10-17
+          Statement:
+          - Effect: Allow
+            Action:
+            - dynamodb:PutItem
+            Resource:
+              Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ServerlessSaaS-Settings
+          - Effect: Allow
+            Action:
+            - dynamodb:UpdateItem
+            Resource:
+              Fn::Sub: arn:aws:dynamodb:${AWS::Region}:${AWS::AccountId}:table/ServerlessSaaS-TenantDetails
+    Metadata:
+      SamResourceId: UpdateTenantApiGatewayUrlLambdaExecutionRole
+  UpdateTenantApiGatewayUrlFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: UpdateTenantApiGatewayUrlLambdaExecutionRole
+    Properties:
+      CodeUri: s3://serverless-saas-pipeline-artifactsbucket2aac5544-28scb47xk6g1/1903dce02364ee21db9a5104d7e9e07d
+      Handler: update_tenant_apigatewayurl.handler
+      Runtime: python3.8
+      Role:
+        Fn::GetAtt:
+        - UpdateTenantApiGatewayUrlLambdaExecutionRole
+        - Arn
+      Layers:
+      - Ref: ServerlessSaaSLayers
+    Metadata:
+      SamResourceId: UpdateTenantApiGatewayUrlFunction
+  UpdateTenantApiGatewayUrl:
+    Type: Custom::UpdateTenantApiGatewayUrl
+    DependsOn: UpdateTenantApiGatewayUrlFunction
+    Properties:
+      ServiceToken:
+        Fn::GetAtt:
+        - UpdateTenantApiGatewayUrlFunction
+        - Arn
+      TenantDetailsTableName: ServerlessSaaS-TenantDetails
+      SettingsTableName: ServerlessSaaS-Settings
+      TenantId:
+        Ref: TenantIdParameter
+      TenantApiGatewayUrl:
+        Fn::Sub: https://${ApiGatewayTenantApi}.execute-api.${AWS::Region}.amazonaws.com/prod/
+    Metadata:
+      SamResourceId: UpdateTenantApiGatewayUrl
+Outputs:
+  TenantApiGatewayId:
+    Description: Id for Tenant API Gateway
+    Value:
+      Ref: ApiGatewayTenantApi
+  TenantAPI:
+    Description: API Gateway endpoint URL for Tenant API
+    Value:
+      Fn::Join:
+      - ''
+      - - Fn::Sub: https://${ApiGatewayTenantApi}.execute-api.${AWS::Region}.amazonaws.com/
+        - Ref: StageName
+        - /

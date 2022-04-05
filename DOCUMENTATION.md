@@ -1,4 +1,4 @@
- This section details the architecture of this SaaS Solution. Refer [README.md](README.md) for deployment instructions.
+This section details the architecture of this SaaS Solution. Refer [README.md](README.md) for deployment instructions.
 
 - [Overview](#overview)
 - [High Level Architecture](#high-level-architecture)
