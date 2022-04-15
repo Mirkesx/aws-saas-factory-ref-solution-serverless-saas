@@ -45,9 +45,12 @@ def create_tenant(event, context):
             Item={
                     'tenantId': tenant_details['tenantId'],
                     'tenantName' : tenant_details['tenantName'],
+                    'tenantFullName' : tenant_details['tenantFullName'],
                     'tenantAddress': tenant_details['tenantAddress'],
+                    'tenantCountry': tenant_details['tenantCountry'],
                     'tenantEmail': tenant_details['tenantEmail'],
                     'tenantPhone': tenant_details['tenantPhone'],
+                    'tenantBvn': tenant_details['tenantBvn'],
                     'tenantTier': tenant_details['tenantTier'],
                     'apiKey': tenant_details['apiKey'],
                     'userPoolId': tenant_details['userPoolId'],                 

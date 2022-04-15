@@ -4,8 +4,9 @@
       <div class="card-header">
         <strong>Create new Artifact</strong>
       </div>
+      <div class="DashboardContainer"></div>
       <div class="card-body">
-        <form [formGroup]="artifactForm" action="" method="post">
+        <!-- <form [formGroup]="artifactForm" action="" method="post">
           <div class="form-group">
             <label for="nf-name">Name</label>
             <input
@@ -45,7 +46,7 @@
               </tr>
             </tbody>
           </table>
-          </form>
+          </form> -->
       </div>
       <div class="card-footer">
         <button type="edit" (click)="submit()" [disabled]="!artifactForm.valid" class="btn btn-sm btn-primary">

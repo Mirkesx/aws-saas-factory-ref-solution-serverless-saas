@@ -14,10 +14,14 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION WITH THE
  * SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
-import { ArtifactProduct } from './artifactproduct.interface';
 
 export interface Artifact {
-  id: string;
+  key: string;
+  artifactId: string;
   name: string;
-  artifactProduct: ArtifactProduct[];
+  original_name?: string;
+  path?: string;
+  data_type?: string;
+  size?: number;
+  username?: string;
 }

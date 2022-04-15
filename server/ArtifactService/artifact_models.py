@@ -3,7 +3,7 @@
 
 class Artifact:
     key =''
-    def __init__(self, shardId, artifactId, path, name, data_type, original_name):
+    def __init__(self, shardId, artifactId, path, name, data_type, original_name, username, size):
         self.shardId = shardId
         self.artifactId = artifactId
         self.key = shardId + ':' +  artifactId
@@ -11,3 +11,5 @@ class Artifact:
         self.name = name
         self.data_type = data_type
         self.original_name = original_name
+        self.username = username
+        self.size = size

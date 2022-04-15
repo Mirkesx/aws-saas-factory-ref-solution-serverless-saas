@@ -9,20 +9,26 @@
           <thead>
             <tr>
               <th>Name</th>
-              <th>Line Items</th>
-              <th>Total</th>
+              <th>Username</th>
+              <th>Original Name</th>
+              <th>Path</th>
+              <th>Data Type</th>
+              <th>Size</th>
             </tr>
           </thead>
           <tbody>
             <tr *ngFor="let artifact of artifacts | async">
-              <td><a popover="ID: {{artifact.id}}"
+              <td><a popover="ID: {{artifact.key}}"
                      [outsideClick]="true"
                      triggers="mouseenter"
                      class="link"
-                     routerLink="/artifacts/detail/{{artifact.id}}"
+                     routerLink="/artifacts/detail/{{artifact.key}}"
                   >{{artifact.name}}</a></td>
-              <td>{{artifact.artifactProduct?.length || 0}}</td>
-              <td>{{sum(artifact) | currency}}</td>
+                  <td>{{artifact.username}}</td>
+              <td>{{artifact.original_name}}</td>
+              <td>{{artifact.path}}</td>
+              <td>{{artifact.data_type}}</td>
+              <td>{{artifact.size}}</td>
             </tr>
           </tbody>
         </table>

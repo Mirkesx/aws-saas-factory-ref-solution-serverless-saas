@@ -20,7 +20,6 @@ import { Observable } from 'rxjs';
 import { map, switchMap } from 'rxjs/operators';
 import { ServiceHelperService } from '../../service-helper.service';
 import { Artifact } from '../models/artifact.interface';
-import { ArtifactProduct } from '../models/artifactproduct.interface';
 import { ArtifactsService } from '../artifacts.service';
 
 @Component({
@@ -31,8 +30,6 @@ import { ArtifactsService } from '../artifacts.service';
 export class ArtifactsDetailComponent implements OnInit {
   artifactId$: Observable<string>;
   artifact$: Observable<Artifact>;
-  artifactProducts$: Observable<ArtifactProduct[]>;
-  taxRate = .0899;
   constructor(private route: ActivatedRoute,
               private artifactSvc: ArtifactsService,
               private helperSvc: ServiceHelperService) { }
@@ -40,16 +37,12 @@ export class ArtifactsDetailComponent implements OnInit {
   ngOnInit(): void {
 
     this.artifactId$ = this.route.params.pipe(
-      map(o => o.artifactId)
+      map(a => a.artifactId)
     );
 
     this.artifact$ = this.artifactId$.pipe(
-      switchMap(o => this.artifactSvc.get(o))
+      switchMap(a => this.artifactSvc.get(a))
     );
-
-    this.artifactProducts$ = this.artifact$.pipe(
-      map(o => o.artifactProduct)
-    )
   }
 
   today() {
@@ -59,32 +52,5 @@ export class ArtifactsDetailComponent implements OnInit {
   tenantName() {
     return this.helperSvc.getTenantName();
   }
-
-  sum(op: ArtifactProduct) {
-    return op.price * op.quantity;
-  }
-
-  tax(op: ArtifactProduct) {
-    return this.sum(op) * this.taxRate;
-  }
-
-  total(op: ArtifactProduct) {
-    return this.sum(op) + this.tax(op);
-  }
-
-  subTotal(artifact: Artifact) {
-    return artifact.artifactProduct
-      .map(op => op.price * op.quantity)
-      .reduce((acc, curr) => acc + curr);
-  }
-
-  calcTax(artifact: Artifact) {
-    return this.subTotal(artifact) * this.taxRate;
-  }
-
-  final(artifact: Artifact) {
-    return this.subTotal(artifact) + this.calcTax(artifact);
-  }
-
 
 }

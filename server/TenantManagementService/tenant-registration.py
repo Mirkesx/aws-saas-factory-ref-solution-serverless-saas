@@ -35,10 +35,13 @@ def register_tenant(event, context):
             tenant_details['dedicatedTenancy'] = 'true'
             api_key = platinum_tier_api_key
         elif (tenant_details['tenantTier'].upper() == utils.TenantTier.PREMIUM.value.upper()):
+            tenant_details['dedicatedTenancy'] = 'true'
             api_key = premium_tier_api_key
         elif (tenant_details['tenantTier'].upper() == utils.TenantTier.STANDARD.value.upper()):
+            tenant_details['dedicatedTenancy'] = 'true'
             api_key = standard_tier_api_key
         elif (tenant_details['tenantTier'].upper() == utils.TenantTier.BASIC.value.upper()):
+            tenant_details['dedicatedTenancy'] = 'true'
             api_key = basic_tier_api_key
 
         tenant_details['tenantId'] = tenant_id

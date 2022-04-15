@@ -15,6 +15,8 @@ if [[ $? -ne 0 ]]; then
      git push --set-upstream cc main
 fi
 
+
+
 #Deploying CI/CD pipeline
 cd server/TenantPipeline/
 npm install && npm run build 

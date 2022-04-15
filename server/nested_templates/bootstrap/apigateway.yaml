@@ -1050,11 +1050,11 @@ Resources:
           Stage: !Ref StageName
       Description: Usage plan for basic tier tenants
       Quota:
-        Limit: 1000
+        Limit: 10000
         Period: DAY
       Throttle:
-        BurstLimit: 50
-        RateLimit: 50
+        BurstLimit: 300
+        RateLimit: 300
       UsagePlanName: Plan_Basic_Tier
     DependsOn: 
       - AdminApiGatewayApiprodStage

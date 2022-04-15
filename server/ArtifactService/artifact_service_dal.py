@@ -33,7 +33,7 @@ def get_artifact(event, key):
         logger.log_with_tenant_context(event, artifactId)
         response = table.get_item(Key={'shardId': shardId, 'artifactId': artifactId})
         item = response['Item']
-        artifact = Artifact(item['shardId'], item['artifactId'], item['path'], item['name'], item['data_type'], item['original_name'])
+        artifact = Artifact(item['shardId'], item['artifactId'], item['path'], item['name'], item['data_type'], item['original_name'], item['username'], item['size'])
     except ClientError as e:
         logger.error(e.response['Error']['Message'])
         raise Exception('Error getting a artifact', e)
@@ -67,7 +67,7 @@ def create_artifact(event, payload):
         suffix = random.randrange(suffix_start, suffix_end)
         shardId = tenantId+"-"+str(suffix)
 
-        artifact = Artifact(shardId, str(uuid.uuid4()), payload.path, payload.name, payload.data_type, payload.original_name)
+        artifact = Artifact(shardId, str(uuid.uuid4()), payload.path, payload.name, payload.data_type, payload.original_name, payload.username, payload.size)
         logger.info("artifact: {}".format(artifact))
         response = table.put_item(
             Item=
@@ -77,7 +77,9 @@ def create_artifact(event, payload):
                     'path': artifact.path,
                     'name': artifact.name,
                     'data_type': artifact.data_type,
-                    'original_name': artifact.original_name
+                    'original_name': artifact.original_name,
+                    'username': artifact.username,
+                    'size': artifact.size
                 }
         )
     except ClientError as e:
@@ -96,17 +98,19 @@ def update_artifact(event, payload, key):
         logger.log_with_tenant_context(event, shardId)
         logger.log_with_tenant_context(event, artifactId)
 
-        artifact = Artifact(shardId, artifactId, payload.path, payload.name, payload.data_type, payload.original_name)
+        artifact = Artifact(shardId, artifactId, payload.path, payload.name, payload.data_type, payload.original_name, payload.username, payload.size)
 
         response = table.update_item(Key={'shardId':artifact.shardId, 'artifactId': artifact.artifactId},
-        UpdateExpression="set path=:path, #n=:artifactName, name=:name, data_type=:data_type",
+        UpdateExpression="set path=:path, #n=:artifactName, name=:name, data_type=:data_type, original_name=:original_name, username=:username, size=:size",
         ExpressionAttributeNames= {'#n':'name'},
         ExpressionAttributeValues={
             ':path': artifact.path,
             ':artifactName': artifact.name,
             ':name': artifact.name,
             ':data_type': artifact.data_type,
-            ':original_name': artifact.original_name
+            ':original_name': artifact.original_name,
+            ':username': artifact.username,
+            ':size': artifact.size
         },
         ReturnValues="UPDATED_NEW")
     except ClientError as e:
@@ -149,7 +153,7 @@ def __get_tenant_data(partition_id, get_all_artifacts_response, table):
     response = table.query(KeyConditionExpression=Key('shardId').eq(partition_id))    
     if (len(response['Items']) > 0):
         for item in response['Items']:
-            artifact = Artifact(item['shardId'], item['artifactId'], item['path'], item['name'], item['data_type'], item['original_name'])
+            artifact = Artifact(item['shardId'], item['artifactId'], item['path'], item['name'], item['data_type'], item['original_name'], item['username'], item['size'])
             get_all_artifacts_response.append(artifact)
 
 def __get_dynamodb_table(event, dynamodb):    

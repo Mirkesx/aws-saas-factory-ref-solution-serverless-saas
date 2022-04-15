@@ -33,10 +33,4 @@ export class ArtifactsListComponent implements OnInit {
   ngOnInit(): void {
     this.artifacts = this.artifactSvc.fetch();
   }
-
-  sum(artifact: Artifact): number {
-    return artifact.artifactProduct
-      .map(p => p.price * p.quantity)
-      .reduce((acc, curr) => acc + curr);
-  }
 }

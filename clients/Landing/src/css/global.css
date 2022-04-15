@@ -1,0 +1,28 @@
+body>* {
+    font-family: 'Inter', sans-serif;
+}
+
+.codewallet-vertical-centered {
+    margin: 0;
+    position: absolute;
+    top: 50%;
+    -ms-transform: translate(0, -50%);
+    transform: translate(0, -50%);
+}
+
+.code-wallet-primary {
+    color: #1565D8E5;
+}
+
+.code-wallet-width-100 {
+    width: 100%;
+}
+
+.code-wallet-input-text-typography {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 17px;
+    color: #8692A6;
+}
