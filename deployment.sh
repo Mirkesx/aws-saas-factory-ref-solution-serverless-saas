@@ -192,10 +192,10 @@ export const environment = {
 };
 EoF
 
-npm install --legacy-peer-deps && npm run build
+yarn install && yarn run build
 
-echo "aws s3 sync --delete --cache-control no-store dist s3://$LANDING_APP_SITE_BUCKET"
-aws s3 sync --delete --cache-control no-store dist s3://$LANDING_APP_SITE_BUCKET
+echo "aws s3 sync --delete --cache-control no-store build s3://$LANDING_APP_SITE_BUCKET"
+aws s3 sync --delete --cache-control no-store build s3://$LANDING_APP_SITE_BUCKET
 
 if [[ $? -ne 0 ]]; then
     exit 1
