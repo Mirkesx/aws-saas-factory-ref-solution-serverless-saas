@@ -103,7 +103,7 @@ Resources:
     Type: AWS::IAM::Role
     DependsOn: AuthorizerExecutionRole
     Properties:
-      RoleName: authorizer-access-role
+      RoleName: !Sub authorizer-access-role-${AWS::Region}
       Path: '/'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -115,7 +115,7 @@ Resources:
             Action:
               - sts:AssumeRole       
       Policies:
-        - PolicyName: authorizer-access-role-policy
+        - PolicyName: !Sub authorizer-access-role-policy-${AWS::Region}
           PolicyDocument:
             Version: 2012-10-17
             Statement:
