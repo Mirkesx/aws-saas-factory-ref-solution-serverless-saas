@@ -11,8 +11,8 @@ function JoinUs(props: PropTypes) {
     props.onRightArrowClicked(1, "Individual");
   }
 
-  const handleClickCompany = () => {
-    props.onRightArrowClicked(1, "Company");
+  const handleClickOrganization = () => {
+    props.onRightArrowClicked(1, "Organization");
   }
 
   return (
@@ -111,7 +111,7 @@ function JoinUs(props: PropTypes) {
           <Grid item xs={8}>
             <span className="title">Business</span>
             <span className="description">
-              Own or belong to a company, this is for you.
+              Own or belong to a Organization, this is for you.
             </span>
           </Grid>
           <Grid
@@ -123,7 +123,7 @@ function JoinUs(props: PropTypes) {
           >
             <ArrowForwardIcon
               className="code-wallet-primary join-us-arrow-right"
-              onClick={handleClickCompany}
+              onClick={handleClickOrganization}
             />
           </Grid>
         </Grid>

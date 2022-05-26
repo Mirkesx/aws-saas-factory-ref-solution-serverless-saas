@@ -43,6 +43,7 @@ Parameters:
 Globals:
   Function:
     Timeout: 29
+    MemorySize: 1024
     Layers:
       - !Sub "arn:aws:lambda:${AWS::Region}:580247275435:layer:LambdaInsightsExtension:14"
     Environment:
@@ -68,7 +69,7 @@ Resources:
   AuthorizerExecutionRole:
     Type: AWS::IAM::Role     
     Properties:
-      RoleName: authorizer-execution-role
+      RoleName: !Sub authorizer-execution-role-${AWS::Region}
       Path: '/'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -84,7 +85,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess   
       Policies:      
-        - PolicyName: authorizer-execution-policy
+        - PolicyName: !Sub authorizer-execution-policy-${AWS::Region}
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -137,7 +138,6 @@ Resources:
       Handler: shared_service_authorizer.lambda_handler
       Runtime: python3.8
       Role: !GetAtt AuthorizerExecutionRole.Arn
-      MemorySize: 256
       Tracing: Active
       Layers: 
         - !Ref ServerlessSaaSLayers
@@ -155,7 +155,6 @@ Resources:
       Handler: tenant_authorizer.lambda_handler
       Runtime: python3.8
       Role: !GetAtt AuthorizerExecutionRole.Arn
-      MemorySize: 256
       Tracing: Active
       Layers: 
         - !Ref ServerlessSaaSLayers

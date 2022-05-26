@@ -20,6 +20,8 @@ function PersonalInfoForm(props: PropTypes) {
   const [showPassword, setShowPassword] = useState(false);
   const [fullname, setFullname] = useState(props.userInfo.fullname || "");
   const [email, setEmail] = useState(props.userInfo.email || "");
+  const [errorEmail, setErrorEmail] = useState("");
+  const [tenantname, setTenantname] = useState(props.userInfo.tenantname || "");
   const [password, setPassword] = useState(props.userInfo.password || "");
   const [checked, setChecked] = useState(false);
   const handleClickShowPassword = () => setShowPassword(!showPassword);
@@ -29,9 +31,21 @@ function PersonalInfoForm(props: PropTypes) {
     let userInfo = props.userInfo;
     userInfo.fullname = fullname;
     userInfo.email = email;
+    userInfo.tenantname = tenantname;
     userInfo.password = password;
     props.onRegisterAccountClicked(userInfo);
   };
+
+  const handleOnChangeEmail = (email: string) => {
+    const re = /^(([^<>()\[\]\\.,;:\s@"]+(\.[^<>()\[\]\\.,;:\s@"]+)*)|(".+"))@((\[[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\.[0-9]{1,3}\])|(([a-zA-Z\-0-9]+\.)+[a-zA-Z]{2,}))$/;
+    if (re.test(String(email).toLowerCase())) {
+      setErrorEmail("");
+      setEmail(email);
+    } else {
+      setErrorEmail("Invalid email");
+      setEmail(email);
+    }
+  }
 
   return (
     <Grid container spacing={1} id="personal-info-form-container">
@@ -43,6 +57,7 @@ function PersonalInfoForm(props: PropTypes) {
           placeholder: "Enter your fullname",
           value: fullname,
           setFunction: setFullname,
+          helperText: "",
         },
         {
           id: "email",
@@ -50,16 +65,27 @@ function PersonalInfoForm(props: PropTypes) {
           type: "email",
           placeholder: "Enter your email address",
           value: email,
-          setFunction: setEmail,
+          setFunction: handleOnChangeEmail,
+          helperText: errorEmail || "",
         },
         {
-          id: "password",
-          label_text: "Create Password*",
-          type: "password",
-          placeholder: "Enter your password",
-          value: password,
-          setFunction: setPassword,
+          id: "tenantname",
+          label_text: "Tenant Name*",
+          type: "text",
+          placeholder: "Enter your tenant name",
+          value: tenantname,
+          setFunction: setTenantname,
+          helperText: "",
         },
+        // {
+        //   id: "password",
+        //   label_text: "Create Password*",
+        //   type: "password",
+        //   placeholder: "Enter your password",
+        //   value: password,
+        //   setFunction: setPassword,
+        //   helperText: "",
+        // },
       ].map((item, index) => {
         return (
           <>
@@ -83,6 +109,8 @@ function PersonalInfoForm(props: PropTypes) {
                 fullWidth
                 required
                 onChange={(e) => item.setFunction(e.target.value)}
+                error={item.helperText !== ""}
+                helperText={item.helperText}
                 InputProps={{
                   endAdornment:
                     item.type === "password" ? (

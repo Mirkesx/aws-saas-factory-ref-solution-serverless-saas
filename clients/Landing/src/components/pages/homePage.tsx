@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Grid } from "@mui/material";
 import SignUpToolbar from "../toolbars/SignUpToolbar";
 import SignInText from "../SignInText";
@@ -12,27 +12,46 @@ import LockIcon from "@mui/icons-material/Lock";
 import axios from "axios";
 import Backdrop from "@mui/material/Backdrop";
 import CircularProgress from "@mui/material/CircularProgress";
-import Alert from '@mui/material/Alert';
+import Alert from "@mui/material/Alert";
 import { environment } from "../../environments/environment";
+import { useStripe, useElements, CardElement } from "@stripe/react-stripe-js";
+
+const API_URL = `${environment.apiGatewayUrl}`;
 
 function HomePage() {
+  const stripe = useStripe();
+  const elements = useElements();
   const [openBackdrop, setOpenBackDrop] = useState(false);
   const [showSuccess, setShowSuccess] = useState(false);
   const [showError, setShowError] = useState(false);
+  const [errorMessage, setErrorMessage] = useState("");
+  const [sessionId, setSessionId] = useState("");
   const [step, setStep] = useState(0);
   const [userInfo, setUserInfo] = useState({
     fullname: "",
     email: "",
+    tenantname: "",
     password: "",
     phone: {
       countryCode: "us",
       number: "",
       formattedNumber: "",
     },
-    address: "",
+    address: {
+      city: "",
+      state: "",
+      country: "",
+      line1: "",
+      line2: "",
+      postal: ""
+    },
     country: "",
     bvn: "",
     tenantTier: "",
+    stripeInformation: {
+      sessionId: "",
+      subscriptionType: "",
+    },
   });
 
   const titles = [
@@ -59,7 +78,14 @@ function HomePage() {
             number: "",
             formattedNumber: "",
           },
-          address: "",
+          address: {
+            city: "",
+            state: "",
+            country: "",
+            line1: "",
+            line2: "",
+            postal: ""
+          },
           country: "",
         }));
         break;
@@ -77,6 +103,7 @@ function HomePage() {
           fullname: "",
           email: "",
           password: "",
+          tenantname: "",
           tenantTier: "",
         }));
     }
@@ -95,7 +122,6 @@ function HomePage() {
 
   const handleOnRegisterAccountClicked = (userInfo: any) => {
     setUserInfo(userInfo);
-    console.log(userInfo);
     setStep(2);
   };
 
@@ -104,38 +130,103 @@ function HomePage() {
     setStep(3);
   };
 
-  const handleCreateTenantAccount = (userInfo: any) => {
-    setUserInfo(userInfo);
-    const API_URL = `${environment.apiGatewayUrl}` + "registration";
-    //const API_URL = "https://httpdump.io/ekekx";
-    const tenantDetails = {
-      tenantName: userInfo.fullname.replace(/\s/g, "").toLowerCase(),
-      tenantFullName: userInfo.fullname,
-      tenantEmail: userInfo.email,
-      tenantPassword: userInfo.password,
-      tenantPhone: userInfo.phone,
-      tenantAddress: userInfo.address,
-      tenantCountry: userInfo.country,
-      tenantBvn: userInfo.bvn,
-      tenantTier: userInfo.tenantTier === "Individual" ? "Basic" : "Platinum",
-    };
+  const handleSubmitSub = async () => {
+    if (!stripe || !elements) {
+      // Stripe.js has not yet loaded.
+      // Make sure to disable form submission until Stripe.js has loaded.
+      return;
+    }
 
-    //create a post request using API_URL with axios
+    const result = await stripe.createPaymentMethod({
+      type: "card",
+      card: elements.getElement(CardElement)!,
+      billing_details: {
+        email: userInfo.email,
+        name: userInfo.fullname,
+        phone: userInfo.phone.number,
+      },
+    });
+
+    if (result.error) {
+      //console.log(result.error.message);
+      return {
+        error: result.error.message,
+      };
+    } else {
+      try {
+        const res = await axios.post(API_URL + "stripe", {
+          payment_method: result.paymentMethod.id,
+          email: userInfo.email,
+          name: userInfo.fullname,
+          phone: userInfo.phone.number,
+          address: userInfo.address,
+          lookup_key: userInfo.stripeInformation.subscriptionType,
+        });
+        // eslint-disable-next-line camelcase
+        const { subscription_id, customer_id, price_lookup_key } = res.data;
+        return {
+          data: {
+            subscription_id,
+            customer_id,
+            price_lookup_key,
+            payment_method_id: result.paymentMethod.id,
+          },
+        };
+      } catch (err) {
+        return {
+          error: err,
+        };
+      }
+    }
+  };
+
+  const handleCreateTenantAccount = async (userInfo: any) => {
+    setUserInfo(userInfo);
     handleToggleBackDrop();
-    axios
-      .post(API_URL, tenantDetails)
-      .then((res) => {
-        console.log(res);
-        console.log(res.data);
-        setShowSuccess(true);
-      })
-      .catch((err) => {
-        console.log(err);
-        setShowError(true);
-      })
-      .finally(() => {
-        handleCloseBackDrop();
-      });
+    const result = await handleSubmitSub();
+    //console.log(result);
+    if (result && !result.error) {
+      //console.log("Subscription created succesfully");
+      const tenantDetails = {
+        tenantName: userInfo.tenantname.replace(/\s/g, "").toLowerCase(),
+        tenantFullName: userInfo.fullname,
+        tenantEmail: userInfo.email,
+        tenantPassword: userInfo.password,
+        tenantPhone: userInfo.phone,
+        tenantAddress: JSON.stringify(userInfo.address),
+        tenantCountry: userInfo.country,
+        tenantStripe: JSON.stringify({
+          subscriptionId: result.data!.subscription_id,
+          customerId: result.data!.customer_id,
+          price_lookup_key: result.data!.price_lookup_key,
+          payment_method_id: result.data!.payment_method_id,
+        }),
+        tenantTier: userInfo.tenantTier === "Individual" ? "Basic" : "Platinum",
+      };
+      //console.log(tenantDetails);
+
+      //create a post request using API_URL with axios
+      axios
+        .post(API_URL + "registration", tenantDetails)
+        .then((res) => {
+          //console.log(res);
+          //console.log(res.data);
+          setShowSuccess(true);
+        })
+        .catch((err) => {
+          //console.log(err);
+          setErrorMessage("Error! " + err.message);
+          setShowError(true);
+        })
+        .finally(() => {
+          handleCloseBackDrop();
+        });
+    } else {
+      //console.log("Error while creating subscription");
+      setErrorMessage("Error! " + result!.error);
+      setShowError(true);
+      handleCloseBackDrop();
+    }
   };
 
   const handleCloseBackDrop = () => {
@@ -207,8 +298,20 @@ function HomePage() {
                   ) : (
                     <></>
                   )}
-                  {showSuccess && <Alert onClose={() => setShowSuccess(false)} severity="success">Tenant Created! You will receive an email with your login details.</Alert>}
-                  {showError && <Alert onClose={() => setShowError(false)} severity="error">Error! Tenant not created!</Alert>}
+                  {showSuccess && (
+                    <Alert
+                      onClose={() => setShowSuccess(false)}
+                      severity="success"
+                    >
+                      Tenant Created! You will receive an email with your login
+                      details.
+                    </Alert>
+                  )}
+                  {showError && (
+                    <Alert onClose={() => setShowError(false)} severity="error">
+                      {errorMessage}
+                    </Alert>
+                  )}
                 </Grid>
               </Grid>
               <Grid item xs={3}></Grid>

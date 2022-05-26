@@ -83,7 +83,9 @@ cd ../
 CURRENT_DIR=$(pwd)
 echo "Current Dir: $CURRENT_DIR"
 
-cd clients/Admin
+cd clients
+
+cd Admin
 
 echo "Configuring environment for Admin Client"
 
@@ -179,21 +181,29 @@ cd Landing
 
 echo "Configuring environment for Landing Client"
 
+STRIPE_SECRETS_ARN=$(aws cloudformation list-exports --query "Exports[?Name=='Serverless-SaaS-StripeSecretsArn'].Value" --output text )
+STRIPE_PUBLIC_KEY=$(aws secretsmanager get-secret-value --secret-id $STRIPE_SECRETS_ARN --query SecretString --output text | jq '.stripe_publishable_key' | tr -d '"')
+
+
 cat << EoF > ./src/environments/environment.prod.ts
 export const environment = {
   production: true,
-  apiGatewayUrl: '$ADMIN_APIGATEWAYURL'
+  apiGatewayUrl: '$ADMIN_APIGATEWAYURL',
+  stripePublicKey: '$STRIPE_PUBLIC_KEY'
 };
 EoF
 cat << EoF > ./src/environments/environment.ts
 export const environment = {
   production: true,
-  apiGatewayUrl: '$ADMIN_APIGATEWAYURL'
+  apiGatewayUrl: '$ADMIN_APIGATEWAYURL',
+  stripePublicKey: '$STRIPE_PUBLIC_KEY'
 };
 EoF
 
 yarn install && yarn run build
 
+echo "aws s3 sync --delete --cache-control no-store dist s3://$LANDING_APP_SITE_BUCKET"
+aws s3 sync --delete --cache-control no-store dist s3://$LANDING_APP_SITE_BUCKET
 echo "aws s3 sync --delete --cache-control no-store build s3://$LANDING_APP_SITE_BUCKET"
 aws s3 sync --delete --cache-control no-store build s3://$LANDING_APP_SITE_BUCKET
 
@@ -210,9 +220,3 @@ echo "Admin site URL: https://$ADMIN_SITE_URL"
 echo "Application site URL: https://$APP_SITE_URL"
 echo "Landing site URL: https://$LANDING_APP_SITE_URL"
 echo "Successfully completed deployment"
-
-
-
-
-
-

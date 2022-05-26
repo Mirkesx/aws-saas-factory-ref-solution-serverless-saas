@@ -18,7 +18,11 @@ type PropTypes = {
 
 function ResidencyInfoForm(props: PropTypes) {
   const [phone, setPhone] = useState(props.userInfo.phone || "");
-  const [address, setAddress] = useState(props.userInfo.address || "");
+  const [address1, setAddress1] = useState(props.userInfo.address.line1 || "");
+  const [address2, setAddress2] = useState(props.userInfo.address.line2 || "");
+  const [city, setCity] = useState(props.userInfo.address.city || "");
+  const [postal, setPostal] = useState(props.userInfo.address.postal || "");
+  const [state, setState] = useState(props.userInfo.address.state || "");
   const [country, setCountry] = useState(props.userInfo.country || "none");
   
   const handleOnChangePhoneInput = (value: string, country: any, e: any, formattedValue: string) => {
@@ -33,7 +37,14 @@ function ResidencyInfoForm(props: PropTypes) {
   const handleOnClick = () => {
     let userInfo = props.userInfo;
     userInfo.phone = phone;
-    userInfo.address = address;
+    userInfo.address = {
+      city: city,
+      state: state,
+      country: country,
+      line1: address1,
+      line2: address2,
+      postal: postal,
+    };
     userInfo.country = country;
     props.onSaveContinueClicked(userInfo);
   };
@@ -73,12 +84,54 @@ function ResidencyInfoForm(props: PropTypes) {
       <Grid item xs={12}>
         <TextField
           className="code-wallet-input-text-typography"
-          id="address"
+          id="city"
           type="text"
-          placeholder="Enter your address"
+          placeholder="City"
           variant="outlined"
-          value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          value={city}
+          onChange={(e) => setCity(e.target.value)}
+          style={{width: "30%"}}
+        />
+        <TextField
+          className="code-wallet-input-text-typography"
+          id="state"
+          type="text"
+          placeholder="State, Province or Region"
+          variant="outlined"
+          value={state}
+          onChange={(e) => setState(e.target.value)}
+          style={{width: "45%"}}
+        />
+        <TextField
+          className="code-wallet-input-text-typography"
+          id="postal-code"
+          type="text"
+          placeholder="Postal Code"
+          variant="outlined"
+          value={postal}
+          onChange={(e) => setPostal(e.target.value)}
+          style={{width: "25%"}}
+        />
+      </Grid>
+      <Grid item xs={12}>
+        <TextField
+          className="code-wallet-input-text-typography"
+          id="address-1"
+          type="text"
+          placeholder="Street, Avenue, Company Name, etc."
+          variant="outlined"
+          value={address1}
+          onChange={(e) => setAddress1(e.target.value)}
+          fullWidth
+        />
+        <TextField
+          className="code-wallet-input-text-typography"
+          id="address-2"
+          type="text"
+          placeholder="Apartment, Unit, Building, Floor, etc."
+          variant="outlined"
+          value={address2}
+          onChange={(e) => setAddress2(e.target.value)}
           fullWidth
         />
       </Grid>

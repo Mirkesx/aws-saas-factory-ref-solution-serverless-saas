@@ -1,0 +1,45 @@
+.lateral-menu {
+    position: fixed;
+    top: 64px;
+    left: 0px;
+    width: 256px;
+    bottom: 0px;
+    background: #253239;
+}
+
+.lateral-menu .item {
+    position: relative;
+    color: white;
+    height: 64px;
+    margin: 0;
+    text-transform: uppercase;
+    cursor: pointer;
+    user-select: none;
+}
+
+.lateral-menu .item:hover,
+.lateral-menu .item.active {
+    background: #6633CC;
+}
+
+.lateral-menu .item div {
+    display: inline-block;
+}
+
+.lateral-menu .item .icon {
+    position: absolute;
+    top: 12px;
+    left: 12px;
+}
+
+.lateral-menu .item .icon svg {
+    width: 35px;
+    height: 35px;
+}
+
+.lateral-menu .item .title {
+    position: absolute;
+    top: 21.5px;
+    left: 70px;
+    font-size: 14px;
+}

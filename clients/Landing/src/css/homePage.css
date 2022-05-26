@@ -247,7 +247,7 @@
     text-transform: none;
 }
 
-#bank-verification-form-container .MuiButton-root {
+#bank-verification-form-container #submit {
     font-family: 'Inter';
     font-style: normal;
     font-weight: 400;
@@ -257,3 +257,58 @@
     margin-top: 52px;
     text-transform: none;
 }
+
+#bank-verification-form-container #button-group {
+    margin-top: 20px;
+    margin-bottom: 20px;
+}
+
+#bank-verification-form-container .button-group-button {
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 400;
+    font-size: 16px;
+    line-height: 19px;
+    color: #fff;
+    width: 100px;
+    text-transform: none;
+}
+
+#bank-verification-form-container .button-group-button {
+    color: #000;
+    background-color: rgb(0, 0, 0, 0.12);
+}
+
+#bank-verification-form-container .button-group-button[disabled] {
+    color: #fff;
+    background-color: #1976d2;
+}
+
+.StripeElement {
+    display: block;
+    margin: 0;
+    max-width: 500px;
+    padding: 14px 14px;
+    font-family: 'Inter';
+    font-style: normal;
+    font-weight: 500;
+    font-size: 14px;
+    line-height: 17px;
+    box-shadow: rgba(50, 50, 93, 0.14902) 0px 1px 3px,
+      rgba(0, 0, 0, 0.0196078) 0px 1px 0px;
+    border: 0;
+    outline: 0;
+    border-radius: 4px;
+  }
+  
+  #card-element:hover {
+    outline: #000000 auto 0.5px;
+  }
+  
+  .StripeElement--focus {
+    box-shadow: rgba(50, 50, 93, 0.109804) 0px 4px 6px,
+      rgba(0, 0, 0, 0.0784314) 0px 1px 3px;
+    -webkit-transition: all 150ms ease;
+    transition: all 150ms ease;
+    outline: #1565D8 auto 0.5px !important;
+  }
