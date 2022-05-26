@@ -78,14 +78,11 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-cd ../
 
 CURRENT_DIR=$(pwd)
 echo "Current Dir: $CURRENT_DIR"
 
-cd clients
-
-cd Admin
+cd clients/Admin
 
 echo "Configuring environment for Admin Client"
 
@@ -128,12 +125,12 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-cd ../
+cd ../../
 
 CURRENT_DIR=$(pwd)
 echo "Current Dir: $CURRENT_DIR"
 
-cd Application
+cd clients/"Application"
 
 echo "Configuring environment for App Client"
 
@@ -152,14 +149,16 @@ export const environment = {
 };
 EoF
 
-npm install --legacy-peer-deps && npm run build
+yarn install && yarn run build
 
-echo "aws s3 sync --delete --cache-control no-store dist s3://$APP_SITE_BUCKET"
-aws s3 sync --delete --cache-control no-store dist s3://$APP_SITE_BUCKET 
+echo "aws s3 sync --delete --cache-control no-store build s3://$APP_SITE_BUCKET"
+aws s3 sync --delete --cache-control no-store build s3://$APP_SITE_BUCKET 
 
 if [[ $? -ne 0 ]]; then
     exit 1
 fi
+
+cd ../../
 
 echo "Completed configuring environment for App Client"
 
@@ -172,12 +171,7 @@ if [ $? -ne 0 ]; then
     exit 1
 fi
 
-cd ../
-
-CURRENT_DIR=$(pwd)
-echo "Current Dir: $CURRENT_DIR"
-
-cd Landing
+cd clients/Landing
 
 echo "Configuring environment for Landing Client"
 
@@ -211,7 +205,7 @@ if [[ $? -ne 0 ]]; then
     exit 1
 fi
 
-cd ../..
+cd ../../
 
 echo "Completed configuring environment for Landing Client"
 
