@@ -37,7 +37,8 @@ def lambda_handler(event, context):
     if(auth_manager.isSaaSProvider(unauthorized_claims['custom:userRole'])):
         userpool_id = user_pool_operation_user
         appclient_id = app_client_operation_user  
-        api_key = api_key_operation_user      
+        api_key = api_key_operation_user   
+        tenant_tier = "Platinum" #TODO: Hardcoded for now   
     else:
         #get tenant user pool and app client to validate jwt token against
         tenant_details = table_tenant_details.get_item( 
@@ -48,7 +49,8 @@ def lambda_handler(event, context):
         logger.info(tenant_details)
         userpool_id = tenant_details['Item']['userPoolId']
         appclient_id = tenant_details['Item']['appClientId']        
-        api_key = tenant_details['Item']['apiKey']
+        api_key = tenant_details['Item']['apiKey']      
+        tenant_tier = tenant_details['Item']['tenantTier']
 
     #get keys for tenant user pool to validate
     keys_url = 'https://cognito-idp.{}.amazonaws.com/{}/.well-known/jwks.json'.format(region, userpool_id)
@@ -122,7 +124,8 @@ def lambda_handler(event, context):
         'tenantId': tenant_id,
         'userPoolId': userpool_id,
         'apiKey': api_key,
-        'userRole': user_role
+        'userRole': user_role,
+        'tenantTier': tenant_tier
     }
     
     authResponse['context'] = context

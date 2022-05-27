@@ -20,6 +20,8 @@ Parameters:
     Type: String
   GetTenantsFunctionArn:
     Type: String
+  GetTenantsNamesFunctionArn:
+    Type: String
   CreateTenantFunctionArn:
     Type: String
   GetTenantFunctionArn:
@@ -47,6 +49,8 @@ Parameters:
   EnableUsersByTenantFunctionArn:
     Type: String
   AuthorizerFunctionArn:
+    Type: String
+  StripeCreateSubscriptionFunctionArn:
     Type: String
   AdminApiGatewayApi:
     Type: String
@@ -164,6 +168,13 @@ Resources:
       FunctionName: !Ref GetTenantsFunctionArn
       Principal: apigateway.amazonaws.com
       SourceArn: !Join ["", ["arn:aws:execute-api:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", !Ref AdminApiGatewayApi, "/*/*/*" ]]
+  GetTenantsNamesLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref GetTenantsNamesFunctionArn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join ["", ["arn:aws:execute-api:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", !Ref AdminApiGatewayApi, "/*/*/*" ]]
   DeactivateTenantLambdaApiGatewayExecutionPermission:
     Type: AWS::Lambda::Permission
     Properties:
@@ -185,3 +196,10 @@ Resources:
       FunctionName: !Ref GetTenantConfigFunctionArn
       Principal: apigateway.amazonaws.com
       SourceArn: !Join ["", ["arn:aws:execute-api:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", !Ref AdminApiGatewayApi, "/*/*/*" ]]    
+  StripeCustomerCreateLambdaApiGatewayExecutionPermission:
+    Type: AWS::Lambda::Permission
+    Properties:
+      Action: lambda:InvokeFunction
+      FunctionName: !Ref StripeCreateSubscriptionFunctionArn
+      Principal: apigateway.amazonaws.com
+      SourceArn: !Join ["", ["arn:aws:execute-api:", !Ref "AWS::Region", ":", !Ref "AWS::AccountId", ":", !Ref AdminApiGatewayApi, "/*/*/*" ]]  

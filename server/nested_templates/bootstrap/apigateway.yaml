@@ -22,6 +22,8 @@ Parameters:
     Type: String
   GetTenantsFunctionArn:
     Type: String
+  GetTenantsNamesFunctionArn:
+    Type: String
   CreateTenantFunctionArn:
     Type: String
   GetTenantFunctionArn:
@@ -49,6 +51,8 @@ Parameters:
   EnableUsersByTenantFunctionArn:
     Type: String
   AuthorizerFunctionArn:
+    Type: String
+  StripeCreateSubscriptionFunctionArn:
     Type: String
   ApiKeyOperationUsersParameter:
     Type: String    
@@ -430,7 +434,53 @@ Resources:
                 passthroughBehavior: when_no_match
                 requestTemplates:
                   application/json: '{"statusCode": 200}'
-                type: mock                 
+                type: mock   
+                        
+          /tenants-names:
+            get:
+              summary: Returns all tenants' names
+              description: Returns all tenants
+              produces:
+                - application/json
+              responses: {}
+              x-amazon-apigateway-integration:
+                uri: !Join
+                  - ''
+                  - - !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    -  !Ref GetTenantsNamesFunctionArn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy        
+            options:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              responses:
+                "200":
+                  description: 200 response
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock          
+          
           /tenant:
             post:
               summary: Creates a tenant
@@ -601,7 +651,51 @@ Resources:
                 passthroughBehavior: when_no_match
                 requestTemplates:
                   application/json: "{\"statusCode\": 200}"
-                type: mock     
+                type: mock   
+          /stripe:
+            post:
+              summary: Create a new stripe subscription
+              description: Create a new stripe subscription
+              produces:
+                - application/json
+              responses: {}
+              x-amazon-apigateway-integration:
+                uri: !Join
+                  - ''
+                  - - !Sub arn:aws:apigateway:${AWS::Region}:lambda:path/2015-03-31/functions/
+                    -  !Ref StripeCreateSubscriptionFunctionArn
+                    - /invocations
+                httpMethod: POST
+                type: aws_proxy        
+            options:
+              consumes:
+                - application/json
+              produces:
+                - application/json
+              responses:
+                "200":
+                  description: 200 response
+                  schema:
+                    $ref: "#/definitions/Empty"
+                  headers:
+                    Access-Control-Allow-Origin:
+                      type: string
+                    Access-Control-Allow-Methods:
+                      type: string
+                    Access-Control-Allow-Headers:
+                      type: string
+              x-amazon-apigateway-integration:
+                responses:
+                  default:
+                    statusCode: 200
+                    responseParameters:
+                      method.response.header.Access-Control-Allow-Methods: "'DELETE,GET,HEAD,OPTIONS,PATCH,POST,PUT'"
+                      method.response.header.Access-Control-Allow-Headers: "'Content-Type,Authorization,X-Amz-Date,X-Api-Key,X-Amz-Security-Token'"
+                      method.response.header.Access-Control-Allow-Origin: "'*'"
+                passthroughBehavior: when_no_match
+                requestTemplates:
+                  application/json: '{"statusCode": 200}'
+                type: mock          
             
           /user/{username}:
             get:

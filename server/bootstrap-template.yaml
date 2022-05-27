@@ -82,6 +82,7 @@ Resources:
         TenantStackMappingTableName: !GetAtt DynamoDBTables.Outputs.TenantStackMappingTableName
         TenantUserPoolCallbackURLParameter: !GetAtt UserInterface.Outputs.ApplicationSite 
         LambdaCanaryDeploymentPreference: !Ref LambdaCanaryDeploymentPreference
+        StripeSecretsArnParameter: !GetAtt UserInterface.Outputs.StripeSecretsArn
 
   APIs:
     Type: AWS::Serverless::Application
@@ -97,6 +98,7 @@ Resources:
         DeProvisionTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.DeProvisionTenantFunctionArn
         ActivateTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.ActivateTenantFunctionArn
         GetTenantsFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantsFunctionArn
+        GetTenantsNamesFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantsNamesFunctionArn
         GetTenantConfigFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantConfigFunctionArn
         CreateTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.CreateTenantFunctionArn
         GetTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantFunctionArn          
@@ -110,7 +112,8 @@ Resources:
         CreateUserFunctionArn: !GetAtt LambdaFunctions.Outputs.CreateUserFunctionArn
         DisableUsersByTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.DisableUsersByTenantFunctionArn
         EnableUsersByTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.EnableUsersByTenantFunctionArn          
-        AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn          
+        AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn       
+        StripeCreateSubscriptionFunctionArn: !GetAtt LambdaFunctions.Outputs.StripeCreateSubscriptionFunctionArn      
         ApiKeyOperationUsersParameter: !Ref ApiKeyOperationUsersParameter
         ApiKeyPlatinumTierParameter: !Ref ApiKeyPlatinumTierParameter
         ApiKeyPremiumTierParameter: !Ref ApiKeyPremiumTierParameter
@@ -131,6 +134,7 @@ Resources:
         ActivateTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.ActivateTenantFunctionArn
         GetTenantConfigFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantConfigFunctionArn
         GetTenantsFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantsFunctionArn
+        GetTenantsNamesFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantsNamesFunctionArn
         CreateTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.CreateTenantFunctionArn
         GetTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.GetTenantFunctionArn          
         DeactivateTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.DeactivateTenantFunctionArn          
@@ -143,7 +147,8 @@ Resources:
         CreateUserFunctionArn: !GetAtt LambdaFunctions.Outputs.CreateUserFunctionArn
         DisableUsersByTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.DisableUsersByTenantFunctionArn
         EnableUsersByTenantFunctionArn: !GetAtt LambdaFunctions.Outputs.EnableUsersByTenantFunctionArn          
-        AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn         
+        AuthorizerFunctionArn: !GetAtt LambdaFunctions.Outputs.SharedServicesAuthorizerFunctionArn     
+        StripeCreateSubscriptionFunctionArn: !GetAtt LambdaFunctions.Outputs.StripeCreateSubscriptionFunctionArn        
         AdminApiGatewayApi: !GetAtt APIs.Outputs.AdminApiGatewayApi
 
   #Create cloudfront and s3 for UI Cde
@@ -238,4 +243,9 @@ Outputs:
     Value: !GetAtt APIs.Outputs.UsagePlanPlatinumTier
     Export:
       Name: "Serverless-SaaS-UsagePlanPlatinumTier" 
+  StripeSecretsArn: 
+    Description: The SM resource for Stripe Keys
+    Value: !GetAtt UserInterface.Outputs.StripeSecretsArn
+    Export:
+      Name: "Serverless-SaaS-StripeSecretsArn" 
 

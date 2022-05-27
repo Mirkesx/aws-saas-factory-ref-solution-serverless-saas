@@ -28,6 +28,9 @@ Parameters:
   CognitoAppClientIdParameter:
     Type: String
     Description: "App Client Id for Tenant"
+  CognitoTenantTierParameter:
+    Type: String
+    Description: "Tenant tier Id for Tenant"
   StageName:
     Type: String
     Default: "prod"

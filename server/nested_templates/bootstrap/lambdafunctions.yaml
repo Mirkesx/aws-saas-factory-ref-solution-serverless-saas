@@ -40,6 +40,8 @@ Parameters:
   LambdaCanaryDeploymentPreference:
     Type: String    
     Default: "False"
+  StripeSecretsArnParameter:
+    Type: String
 Globals:
   Function:
     Timeout: 29
@@ -69,7 +71,7 @@ Resources:
   AuthorizerExecutionRole:
     Type: AWS::IAM::Role     
     Properties:
-      RoleName: !Sub authorizer-execution-role-${AWS::Region}
+      RoleName: authorizer-execution-role
       Path: '/'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -85,7 +87,7 @@ Resources:
         - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
         - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess   
       Policies:      
-        - PolicyName: !Sub authorizer-execution-policy-${AWS::Region}
+        - PolicyName: authorizer-execution-policy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -98,12 +100,17 @@ Resources:
                 Action:
                   - dynamodb:GetItem
                 Resource:
-                  - !Ref TenantDetailsTableArn    
+                  - !Ref TenantDetailsTableArn  
+              - Effect: Allow
+                Action:
+                  - secretsmanager:GetSecretValue
+                Resource:
+                  - !Ref StripeSecretsArnParameter
   AuthorizerAccessRole:
     Type: AWS::IAM::Role
     DependsOn: AuthorizerExecutionRole
     Properties:
-      RoleName: !Sub authorizer-access-role-${AWS::Region}
+      RoleName: authorizer-access-role
       Path: '/'
       AssumeRolePolicyDocument:
         Version: 2012-10-17
@@ -115,7 +122,7 @@ Resources:
             Action:
               - sts:AssumeRole       
       Policies:
-        - PolicyName: !Sub authorizer-access-role-policy-${AWS::Region}
+        - PolicyName: authorizer-access-role-policy
           PolicyDocument:
             Version: 2012-10-17
             Statement:
@@ -138,6 +145,7 @@ Resources:
       Handler: shared_service_authorizer.lambda_handler
       Runtime: python3.8
       Role: !GetAtt AuthorizerExecutionRole.Arn
+      MemorySize: 256
       Tracing: Active
       Layers: 
         - !Ref ServerlessSaaSLayers
@@ -155,6 +163,7 @@ Resources:
       Handler: tenant_authorizer.lambda_handler
       Runtime: python3.8
       Role: !GetAtt AuthorizerExecutionRole.Arn
+      MemorySize: 256
       Tracing: Active
       Layers: 
         - !Ref ServerlessSaaSLayers
@@ -823,7 +832,43 @@ Resources:
           Value: !Ref GetTenantsFunction
         - Name: ExecutedVersion
           Value: !GetAtt GetTenantsFunction.Version.Version
-        
+      
+
+  GetTenantsNamesFunction:
+    Type: AWS::Serverless::Function
+    DependsOn: TenantManagementLambdaExecutionRole
+    Properties:
+      CodeUri: ../../TenantManagementService/
+      Handler: tenant-management.get_tenants_names
+      Runtime: python3.8
+      Role: !GetAtt TenantManagementLambdaExecutionRole.Arn
+      Tracing: Active
+      Layers:
+        - !Ref ServerlessSaaSLayers 
+      AutoPublishAlias: live
+      DeploymentPreference:
+        Enabled: !Ref LambdaCanaryDeploymentPreference
+        Type: Canary10Percent5Minutes
+        Alarms:
+          - !Ref GetTenantsNamesFunctionCanaryErrorsAlarm
+  GetTenantsNamesFunctionCanaryErrorsAlarm:
+    Type: AWS::CloudWatch::Alarm
+    Properties:
+      AlarmDescription: Lambda function canary errors
+      ComparisonOperator: GreaterThanThreshold
+      EvaluationPeriods: 2
+      MetricName: Errors
+      Namespace: AWS/Lambda
+      Period: 60
+      Statistic: Sum
+      Threshold: 0
+      Dimensions:
+        - Name: Resource
+          Value: !Sub "${GetTenantsNamesFunction}:live"
+        - Name: FunctionName
+          Value: !Ref GetTenantsNamesFunction
+        - Name: ExecutedVersion
+          Value: !GetAtt GetTenantsNamesFunction.Version.Version
 
   GetTenantConfigFunction:
     Type: AWS::Serverless::Function
@@ -1142,7 +1187,59 @@ Resources:
       Runtime: python3.8
       Role: !GetAtt UpdateTenantStackMapTableLambdaExecutionRole.Arn
       Layers: 
-          - !Ref ServerlessSaaSLayers        
+          - !Ref ServerlessSaaSLayers
+  # Strip integration
+  StripeSubscriptionLambdaExecutionRole:
+    Type: AWS::IAM::Role
+    Properties:
+      RoleName: !Sub stripe-subscription-lambda-execution-role-${AWS::Region}
+      Path: "/"
+      AssumeRolePolicyDocument:
+        Version: 2012-10-17
+        Statement:
+          - Effect: Allow
+            Principal:
+              Service:
+                - lambda.amazonaws.com
+            Action:
+              - sts:AssumeRole
+      ManagedPolicyArns: 
+        - arn:aws:iam::aws:policy/CloudWatchLambdaInsightsExecutionRolePolicy    
+        - arn:aws:iam::aws:policy/service-role/AWSLambdaBasicExecutionRole
+        - arn:aws:iam::aws:policy/AWSXrayWriteOnlyAccess
+      Policies:
+        - PolicyName: !Sub stripe-subscription-execution-policy-${AWS::Region}
+          PolicyDocument:
+            Version: 2012-10-17
+            Statement:
+              - Effect: Allow
+                Action:
+                  - dynamodb:PutItem
+                  - dynamodb:GetItem
+                  - dynamodb:UpdateItem
+                  - dynamodb:Scan
+                  - dynamodb:Query
+                Resource:
+                  - !Ref TenantDetailsTableArn  
+                  - !Join ["", [!Ref TenantDetailsTableArn, '/index/*']] 
+              - Effect: Allow
+                Action:
+                  - dynamodb:GetItem                  
+                Resource:
+                  - !Ref ServerlessSaaSSettingsTableArn         
+  StripeCreateSubscriptionFunction:
+    Type: AWS::Serverless::Function 
+    DependsOn: StripeSubscriptionLambdaExecutionRole
+    Properties:
+      CodeUri: ../../Stripe/
+      Handler: stripe-integration-node.handler
+      Runtime: nodejs14.x
+      Role: !GetAtt AuthorizerExecutionRole.Arn
+      MemorySize: 256
+      Tracing: Active
+      Environment:
+        Variables:
+          STRIPE_SECRETS_MANAGER_ARN: !Ref StripeSecretsArnParameter
 Outputs:
   RegisterTenantLambdaExecutionRoleArn: 
     Value: !GetAtt RegisterTenantLambdaExecutionRole.Arn          
@@ -1160,6 +1257,8 @@ Outputs:
     Value: !GetAtt GetTenantConfigFunction.Arn  
   GetTenantsFunctionArn: 
     Value: !GetAtt GetTenantsFunction.Arn
+  GetTenantsNamesFunctionArn: 
+    Value: !GetAtt GetTenantsNamesFunction.Arn
   CreateTenantFunctionArn: 
     Value: !GetAtt CreateTenantFunction.Arn
   GetTenantFunctionArn: 
@@ -1192,4 +1291,6 @@ Outputs:
     Value: !GetAtt UpdateSettingsTableFunction.Arn    
   UpdateTenantStackMapTableFunctionArn:
     Value: !GetAtt UpdateTenantStackMapTableFunction.Arn
+  StripeCreateSubscriptionFunctionArn:
+    Value: !GetAtt StripeCreateSubscriptionFunction.Arn
   

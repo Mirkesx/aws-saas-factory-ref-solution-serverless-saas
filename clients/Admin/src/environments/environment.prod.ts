@@ -1,7 +1,7 @@
 export const environment = {
   production: true,
-  clientId: '25tabfjo42tero0e3c0e7rf4dl',
-  issuer: 'https://cognito-idp.us-east-1.amazonaws.com/us-east-1_pVEJJck50',
-  apiGatewayUrl: 'https://iwq1ryp55j.execute-api.us-east-1.amazonaws.com/prod/',
+  clientId: '5votv65hfqti3do2ari5dd4u3b',
+  issuer: 'https://cognito-idp.eu-north-1.amazonaws.com/eu-north-1_hi8pEmnxo',
+  apiGatewayUrl: 'https://hqjh08kkr9.execute-api.eu-north-1.amazonaws.com/prod/',
   domain: ''
 };

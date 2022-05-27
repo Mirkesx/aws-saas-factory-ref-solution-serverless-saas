@@ -11,11 +11,11 @@ Resources:
     Properties:
       CloudFrontOriginAccessIdentityConfig:
         Comment: "Origin Access Identity for both CloudFront Distributions"
-  AdminAppBucket:  
+  AdminAppBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy : Retain
+    DeletionPolicy: Retain
     Properties:
-      PublicAccessBlockConfiguration: 
+      PublicAccessBlockConfiguration:
         BlockPublicAcls: True
         BlockPublicPolicy: True
         IgnorePublicAcls: True
@@ -26,34 +26,34 @@ Resources:
       Bucket: !Ref AdminAppBucket
       PolicyDocument:
         Statement:
-        - Action: 's3:GetObject'
-          Effect: Allow
-          Resource: !Sub 'arn:aws:s3:::${AdminAppBucket}/*'
-          Principal:
-            CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+          - Action: "s3:GetObject"
+            Effect: Allow
+            Resource: !Sub "arn:aws:s3:::${AdminAppBucket}/*"
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
   AdminAppSite:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
-        #Aliases: 
-         # - !Sub 'admin.${CustomDomainName}'
+        #Aliases:
+        # - !Sub 'admin.${CustomDomainName}'
         CustomErrorResponses:
-        # Needed to support angular routing
-        - ErrorCode: 403 
-          ResponseCode: 200
-          ResponsePagePath: '/index.html'
-        - ErrorCode: 404
-          ResponseCode: 200
-          ResponsePagePath: '/index.html'
+          # Needed to support angular routing
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: "/index.html"
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: "/index.html"
         DefaultCacheBehavior:
           AllowedMethods:
-          - GET
-          - HEAD
-          - OPTIONS
+            - GET
+            - HEAD
+            - OPTIONS
           CachedMethods:
-          - GET
-          - HEAD
-          - OPTIONS
+            - GET
+            - HEAD
+            - OPTIONS
           Compress: true
           DefaultTTL: 3600 # in seconds
           ForwardedValues:
@@ -63,22 +63,29 @@ Resources:
           MaxTTL: 86400 # in seconds
           MinTTL: 60 # in seconds
           TargetOriginId: adminapp-s3origin
-          ViewerProtocolPolicy: 'allow-all'
-        DefaultRootObject: 'index.html'
+          ViewerProtocolPolicy: "allow-all"
+        DefaultRootObject: "index.html"
         Enabled: true
         HttpVersion: http2
         Origins:
-        - DomainName: !GetAtt AdminAppBucket.RegionalDomainName
-          Id: adminapp-s3origin
-          S3OriginConfig:
-            OriginAccessIdentity: !Join ["", ["origin-access-identity/cloudfront/", !Ref CloudFrontOriginAccessIdentity]] 
-        PriceClass: 'PriceClass_All'  
+          - DomainName: !GetAtt AdminAppBucket.RegionalDomainName
+            Id: adminapp-s3origin
+            S3OriginConfig:
+              OriginAccessIdentity:
+                !Join [
+                  "",
+                  [
+                    "origin-access-identity/cloudfront/",
+                    !Ref CloudFrontOriginAccessIdentity,
+                  ],
+                ]
+        PriceClass: "PriceClass_All"
 
   AppBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy : Retain
+    DeletionPolicy: Retain
     Properties:
-      PublicAccessBlockConfiguration: 
+      PublicAccessBlockConfiguration:
         BlockPublicAcls: True
         BlockPublicPolicy: True
         IgnorePublicAcls: True
@@ -89,23 +96,23 @@ Resources:
       Bucket: !Ref AppBucket
       PolicyDocument:
         Statement:
-        - Action: 's3:GetObject'
-          Effect: Allow
-          Resource: !Sub 'arn:aws:s3:::${AppBucket}/*'
-          Principal:
-            CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+          - Action: "s3:GetObject"
+            Effect: Allow
+            Resource: !Sub "arn:aws:s3:::${AppBucket}/*"
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
   ApplicationSite:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         CustomErrorResponses:
-        # Needed to support angular routing
-        - ErrorCode: 403 
-          ResponseCode: 200
-          ResponsePagePath: '/index.html'
-        - ErrorCode: 404
-          ResponseCode: 200
-          ResponsePagePath: '/index.html'
+          # Needed to support angular routing
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: "/index.html"
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: "/index.html"
         DefaultCacheBehavior:
           AllowedMethods:
             - DELETE
@@ -124,21 +131,28 @@ Resources:
           MaxTTL: 86400 # in seconds
           MinTTL: 60 # in seconds
           TargetOriginId: tenantapp-s3origin
-          ViewerProtocolPolicy: 'allow-all'
-        DefaultRootObject: 'index.html'
+          ViewerProtocolPolicy: "allow-all"
+        DefaultRootObject: "index.html"
         Enabled: true
         HttpVersion: http2
         Origins:
-        - DomainName: !GetAtt 'AppBucket.RegionalDomainName'
-          Id: tenantapp-s3origin
-          S3OriginConfig:
-            OriginAccessIdentity: !Join ["", ["origin-access-identity/cloudfront/", !Ref CloudFrontOriginAccessIdentity]] 
-        PriceClass: 'PriceClass_All' 
+          - DomainName: !GetAtt "AppBucket.RegionalDomainName"
+            Id: tenantapp-s3origin
+            S3OriginConfig:
+              OriginAccessIdentity:
+                !Join [
+                  "",
+                  [
+                    "origin-access-identity/cloudfront/",
+                    !Ref CloudFrontOriginAccessIdentity,
+                  ],
+                ]
+        PriceClass: "PriceClass_All"
   LandingAppBucket:
     Type: AWS::S3::Bucket
-    DeletionPolicy : Retain
+    DeletionPolicy: Retain
     Properties:
-      PublicAccessBlockConfiguration: 
+      PublicAccessBlockConfiguration:
         BlockPublicAcls: True
         BlockPublicPolicy: True
         IgnorePublicAcls: True
@@ -149,23 +163,23 @@ Resources:
       Bucket: !Ref LandingAppBucket
       PolicyDocument:
         Statement:
-        - Action: 's3:GetObject'
-          Effect: Allow
-          Resource: !Sub 'arn:aws:s3:::${LandingAppBucket}/*'
-          Principal:
-            CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
+          - Action: "s3:GetObject"
+            Effect: Allow
+            Resource: !Sub "arn:aws:s3:::${LandingAppBucket}/*"
+            Principal:
+              CanonicalUser: !GetAtt CloudFrontOriginAccessIdentity.S3CanonicalUserId
   LandingApplicationSite:
     Type: AWS::CloudFront::Distribution
     Properties:
       DistributionConfig:
         CustomErrorResponses:
-        # Needed to support angular routing
-        - ErrorCode: 403 
-          ResponseCode: 200
-          ResponsePagePath: '/index.html'
-        - ErrorCode: 404
-          ResponseCode: 200
-          ResponsePagePath: '/index.html'
+          # Needed to support angular routing
+          - ErrorCode: 403
+            ResponseCode: 200
+            ResponsePagePath: "/index.html"
+          - ErrorCode: 404
+            ResponseCode: 200
+            ResponsePagePath: "/index.html"
         DefaultCacheBehavior:
           AllowedMethods:
             - DELETE
@@ -184,16 +198,33 @@ Resources:
           MaxTTL: 86400 # in seconds
           MinTTL: 60 # in seconds
           TargetOriginId: landingapp-s3origin
-          ViewerProtocolPolicy: 'allow-all'
-        DefaultRootObject: 'index.html'
+          ViewerProtocolPolicy: "allow-all"
+        DefaultRootObject: "index.html"
         Enabled: true
         HttpVersion: http2
         Origins:
-        - DomainName: !GetAtt 'LandingAppBucket.RegionalDomainName'
-          Id: landingapp-s3origin
-          S3OriginConfig:
-            OriginAccessIdentity: !Join ["", ["origin-access-identity/cloudfront/", !Ref CloudFrontOriginAccessIdentity]] 
-        PriceClass: 'PriceClass_All'       
+          - DomainName: !GetAtt "LandingAppBucket.RegionalDomainName"
+            Id: landingapp-s3origin
+            S3OriginConfig:
+              OriginAccessIdentity:
+                !Join [
+                  "",
+                  [
+                    "origin-access-identity/cloudfront/",
+                    !Ref CloudFrontOriginAccessIdentity,
+                  ],
+                ]
+        PriceClass: "PriceClass_All"
+  StripeSecrets:
+    Type: AWS::SecretsManager::Secret
+    Properties:
+      Name: !Sub serveless-saas-stripe-secrets
+      Description: "Stripe API keys"
+      GenerateSecretString:
+          ExcludeCharacters: '@/'
+          GenerateStringKey: "password"
+          PasswordLength: 32
+          SecretStringTemplate: '{"stripe_publishable_key": "","stripe_secret_key": ""}'
 Outputs:
   AdminBucket:
     Description: The name of the S3 Bucket for uploading the Admin Management site to
@@ -206,12 +237,13 @@ Outputs:
     Value: !Ref AppBucket
   ApplicationSite:
     Description: The name of the CloudFront url for the Tenant Management site
-    Value: !GetAtt ApplicationSite.DomainName    
+    Value: !GetAtt ApplicationSite.DomainName
   LandingAppBucket:
     Description: The name of the S3 Bucket for uploading the Landing site to
     Value: !Ref LandingAppBucket
   LandingApplicationSite:
     Description: The name of the CloudFront url for the Landing site
-    Value: !GetAtt LandingApplicationSite.DomainName   
-
-         
+    Value: !GetAtt LandingApplicationSite.DomainName
+  StripeSecretsArn:
+    Description: The name of Stripe Secret Manager resource
+    Value: !Ref StripeSecrets

@@ -50,6 +50,7 @@ def lambda_handler(event, context):
         appclient_id = tenant_details['Item']['appClientId']
         apigateway_url = tenant_details['Item']['apiGatewayUrl']
         api_key = tenant_details['Item']['apiKey']
+        tenant_tier = tenant_details['Item']['tenantTier']
         
 
     #get keys for tenant user pool to validate
@@ -120,7 +121,8 @@ def lambda_handler(event, context):
         'tenantId': tenant_id,
         'userPoolId': userpool_id,
         'apiKey': api_key,
-        'userRole': user_role
+        'userRole': user_role,
+        'tenantTier': tenant_tier
     }
     
     authResponse['context'] = context

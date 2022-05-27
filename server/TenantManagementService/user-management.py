@@ -64,6 +64,7 @@ def create_user(event, context):
     tenant_id = event['requestContext']['authorizer']['tenantId']    
     user_pool_id = event['requestContext']['authorizer']['userPoolId']    
     user_role = event['requestContext']['authorizer']['userRole']
+    tenant_tier = event['requestContext']['authorizer']['tenantTier']
 
     user_details = json.loads(event['body'])
 
@@ -84,34 +85,41 @@ def create_user(event, context):
         user_tenant_id = tenant_id
 
     if (auth_manager.isTenantAdmin(user_role) or auth_manager.isSystemAdmin(user_role)):
-        metrics_manager.record_metric(event, "UserCreated", "Count", 1)
-        response = client.admin_create_user(
-            Username=user_details['userName'],
-            UserPoolId=user_pool_id,
-            ForceAliasCreation=True,
-            UserAttributes=[
-                {
-                    'Name': 'email',
-                    'Value': user_details['userEmail']
-                },
-                {
-                    'Name': 'custom:userRole',
-                    'Value': user_details['userRole'] 
-                },            
-                {
-                    'Name': 'custom:tenantId',
-                    'Value': user_tenant_id
-                }
-            ]
+        response_list_users = client.list_users(
+            UserPoolId=user_pool_id
         )
-        
-        logger.log_with_tenant_context(event, response)
-        user_mgmt = UserManagement()
-        user_mgmt.add_user_to_group(user_pool_id, user_details['userName'], user_tenant_id)
-        response_mapping = user_mgmt.create_user_tenant_mapping(user_details['userName'], user_tenant_id)
+        if  (tenant_tier == "Basic" and len(response_list_users['Users']) < 1) or (tenant_tier == "Platinum" and len(response_list_users['Users']) < 5): #TODO: Hardcoded for now, needed to put it inside a DynamoDB table
+            metrics_manager.record_metric(event, "UserCreated", "Count", 1)
+            response = client.admin_create_user(
+                Username=user_details['userName'],
+                UserPoolId=user_pool_id,
+                ForceAliasCreation=True,
+                UserAttributes=[
+                    {
+                        'Name': 'email',
+                        'Value': user_details['userEmail']
+                    },
+                    {
+                        'Name': 'custom:userRole',
+                        'Value': user_details['userRole'] 
+                    },            
+                    {
+                        'Name': 'custom:tenantId',
+                        'Value': user_tenant_id
+                    }
+                ]
+            )
+            
+            logger.log_with_tenant_context(event, response)
+            user_mgmt = UserManagement()
+            user_mgmt.add_user_to_group(user_pool_id, user_details['userName'], user_tenant_id)
+            response_mapping = user_mgmt.create_user_tenant_mapping(user_details['userName'], user_tenant_id)
 
-        logger.log_with_tenant_context(event, "Request completed to create new user ")
-        return utils.create_success_response("New user created")
+            logger.log_with_tenant_context(event, "Request completed to create new user ")
+            return utils.create_success_response("New user created")
+        else:
+            logger.log_with_tenant_context(event, "Request failed: limit of users reached.")
+            return utils.create_forbidden_response("User not created. Limit of users reached.")
     else:
         logger.log_with_tenant_context(event, "Request completed as unauthorized. Only tenant admin or system admin can create user!")        
         return utils.create_unauthorized_response()

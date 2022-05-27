@@ -19,6 +19,7 @@ class TenantTier(Enum):
 class StatusCodes(Enum):
     SUCCESS    = 200
     UN_AUTHORIZED  = 401
+    FORBIDDEN = 403
     NOT_FOUND = 404
     
 class Service_Identifier(Enum):
@@ -54,6 +55,19 @@ def create_unauthorized_response():
 def create_notfound_response(message):
     return {
         "statusCode": StatusCodes.NOT_FOUND.value,
+        "headers": {
+            "Access-Control-Allow-Headers" : "Content-Type",
+            "Access-Control-Allow-Origin": "*",
+            "Access-Control-Allow-Methods": "OPTIONS,POST,GET,PUT"
+        },
+        "body": json.dumps({
+            "message": message
+        }),
+    }
+
+def create_forbidden_response(message):
+    return {
+        "statusCode": StatusCodes.FORBIDDEN.value,
         "headers": {
             "Access-Control-Allow-Headers" : "Content-Type",
             "Access-Control-Allow-Origin": "*",

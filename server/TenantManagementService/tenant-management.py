@@ -50,7 +50,7 @@ def create_tenant(event, context):
                     'tenantCountry': tenant_details['tenantCountry'],
                     'tenantEmail': tenant_details['tenantEmail'],
                     'tenantPhone': tenant_details['tenantPhone'],
-                    'tenantBvn': tenant_details['tenantBvn'],
+                    'tenantStripe': tenant_details['tenantStripe'],
                     'tenantTier': tenant_details['tenantTier'],
                     'apiKey': tenant_details['apiKey'],
                     'userPoolId': tenant_details['userPoolId'],                 
@@ -66,6 +66,7 @@ def create_tenant(event, context):
     else:
         return utils.create_success_response("Tenant Created")
 
+@tracer.capture_lambda_handler
 def get_tenants(event, context):
     
     table_tenant_details = __getTenantManagementTable(event)
@@ -77,6 +78,17 @@ def get_tenants(event, context):
     else:
         return utils.generate_response(response['Items'])    
 
+@tracer.capture_lambda_handler
+def get_tenants_names(event, context):
+    dynamodb = boto3.resource('dynamodb')
+    table_tenant_details = dynamodb.Table('ServerlessSaaS-TenantDetails')#TODO: read table names from env vars
+    
+    try:
+        response = table_tenant_details.scan(AttributesToGet=['tenantId','tenantName'])
+    except Exception as e:
+        raise Exception('Error getting all tenants', e)
+    else:
+        return utils.generate_response(response['Items'])    
 
 @tracer.capture_lambda_handler
 def update_tenant(event, context):
@@ -283,7 +295,7 @@ def load_tenant_config(event, context):
         response = table_tenant_details.query(
             IndexName="ServerlessSaas-TenantConfig",
             KeyConditionExpression=Key('tenantName').eq(tenantName),
-            ProjectionExpression="userPoolId, appClientId, apiGatewayUrl"
+            ProjectionExpression="userPoolId, appClientId, apiGatewayUrl, tenantTier"
         ) 
     except Exception as e:
         raise Exception('Error getting tenant config', e)

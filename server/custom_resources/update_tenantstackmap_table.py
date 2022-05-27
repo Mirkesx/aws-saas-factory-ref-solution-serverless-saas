@@ -17,7 +17,7 @@ except Exception as e:
 @helper.update
 def do_action(event, _):
     """ One time entry for pooled tenants inside tenant stack mapping table.
-        This ensures that when code pipeline for tenant template is kicked off, it always create a default stack for pooled tenants.
+        This ensures that when code pipeline for tenant template is kicked off, it always create a default stack for pooled tenants if verified is True.
     Args:
         event ([type]): [description]
         _ ([type]): [description]
@@ -33,7 +33,8 @@ def do_action(event, _):
                     'tenantId': 'pooled',
                     'stackName' : 'stack-pooled',
                     'applyLatestRelease': True,
-                    'codeCommitId': ''
+                    'codeCommitId': '',
+                    'verified': False,
                 }
             )                  
     

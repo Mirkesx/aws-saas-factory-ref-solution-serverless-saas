@@ -345,12 +345,14 @@ def get_tenant_params(tenantId):
     if (tenantId != "pooled"):
         tenant_details = table_tenant_details.get_item(Key={'tenantId': tenantId})   
         userPoolId = tenant_details['Item']['userPoolId']                     
-        appClientId = tenant_details['Item']['appClientId']
+        appClientId = tenant_details['Item']['appClientId']            
+        tenantTier = tenant_details['Item']['tenantTier']     
     else:
         tenant_details = table_tenant_settings.get_item(Key={'settingName': 'userPoolId-pooled'})                        
         userPoolId = tenant_details['Item']['settingValue']
         tenant_details = table_tenant_settings.get_item(Key={'settingName': 'appClientId-pooled'})                        
-        appClientId = tenant_details['Item']['settingValue']
+        appClientId = tenant_details['Item']['settingValue']              
+        tenantTier = 'Platinum'
 
     params = []
     param_tenantid = {}
@@ -367,6 +369,11 @@ def get_tenant_params(tenantId):
     param_appclientid['ParameterKey'] = 'CognitoAppClientIdParameter'
     param_appclientid['ParameterValue'] = appClientId
     params.append(param_appclientid)
+
+    param_tenanttier = {}
+    param_tenanttier['ParameterKey'] = 'CognitoTenantTierParameter'
+    param_tenanttier['ParameterValue'] = tenantTier
+    params.append(param_tenanttier)
 
     return params
 
@@ -438,6 +445,9 @@ def lambda_handler(event, context):
         mappings['Items'] = [x for x in mappings['Items'] if x['stackName'] != "stack-pooled"]
         #Update/Create stacks for all tenants
         for mapping in mappings['Items']:
+            if mapping['verified'] != True:
+                # skipping the stack creation for the tenant if the tenant is not verified
+                continue
             stack = mapping['stackName']
             tenantId = mapping['tenantId']
             applyLatestRelease = mapping['applyLatestRelease']

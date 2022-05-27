@@ -29,7 +29,8 @@ def provision_tenant(event, context):
                     'tenantId': tenant_details['tenantId'],
                     'stackName': stack_name.format(tenant_details['tenantId']),
                     'applyLatestRelease': True,
-                    'codeCommitId': ''
+                    'codeCommitId': '',
+                    'verified': False
                 }
             )    
         
