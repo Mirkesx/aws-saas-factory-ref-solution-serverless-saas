@@ -26,6 +26,8 @@ function BankVerificationForm(props: PropTypes) {
       props.userInfo.tenantTier.toLowerCase() + "-monthly"
   );
 
+  const [isCardValid, setIsCardValid] = useState(false);
+
   const tier = props.userInfo.tenantTier || "";
   const price = cost_map[tier][selected] || 0;
 
@@ -40,6 +42,14 @@ function BankVerificationForm(props: PropTypes) {
     setSubscriptionType(props.userInfo.tenantTier.toLowerCase() + "-" + type);
   };
 
+  const handleValidation = async (event: any) => {
+    if (event.complete){
+      setIsCardValid(true);
+    } else{
+      setIsCardValid(false);
+    }
+  }
+
   return (
     <Grid container spacing={1} id="bank-verification-form-container">
     <Grid item xs={12}>
@@ -48,7 +58,7 @@ function BankVerificationForm(props: PropTypes) {
       </p>
     </Grid>
       <Grid item xs={12}>
-        <CardInput />
+        <CardInput onSaveContinueClicked={handleValidation}/>
       </Grid>
       <Grid item xs={12}>
         <p className="bank-verification-form-label">
@@ -91,7 +101,13 @@ function BankVerificationForm(props: PropTypes) {
         </div>
       </Grid>
       <Grid item xs={12}>
-        <Button id="submit" variant="contained" fullWidth onClick={handleClick}>
+        <Button 
+          id="submit" 
+          variant="contained" 
+          fullWidth 
+          onClick={handleClick}
+          disabled={!isCardValid}
+        >
           {"Complete Registration"}
         </Button>
       </Grid>

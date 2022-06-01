@@ -19,13 +19,17 @@ type PropTypes = {
 function PersonalInfoForm(props: PropTypes) {
   const [showPassword, setShowPassword] = useState(false);
   const [fullname, setFullname] = useState(props.userInfo.fullname || "");
+  const [errorFullname, setErrorFullname] = useState("");
   const [email, setEmail] = useState(props.userInfo.email || "");
   const [errorEmail, setErrorEmail] = useState("");
   const [tenantname, setTenantname] = useState(props.userInfo.tenantname || "");
+  const [errorTenantname, setErrorTenantname] = useState("");
   const [password, setPassword] = useState(props.userInfo.password || "");
   const [checked, setChecked] = useState(false);
   const handleClickShowPassword = () => setShowPassword(!showPassword);
   const handleMouseDownPassword = () => setShowPassword(!showPassword);
+
+  
 
   const handleOnClick = () => {
     let userInfo = props.userInfo;
@@ -45,7 +49,31 @@ function PersonalInfoForm(props: PropTypes) {
       setErrorEmail("Invalid email");
       setEmail(email);
     }
+  };
+
+//new validation functions
+  const handleOnChangeFullname = (fullname: string ) =>{
+    if (fullname){//just not empty. further conditions can be applied
+      setErrorFullname("");
+    } else{
+      setErrorFullname("Invalid fullname");
+    }
+    setFullname(fullname);
   }
+
+  const handleOnChangeTenantname = (tenantname: string ) =>{
+    const format = /^[!@#$%^&*()_+\-=\[\]{};':"\\|,.<>\/?]*$/;
+    const minChar = 4;
+    const maxChar = 15;
+
+    if (tenantname.length >= minChar && tenantname.length <= maxChar && (!tenantname.match(format))){
+      setErrorTenantname("");
+    } else{
+      setErrorTenantname("Tenant name should be 4-15  characters and shouldn't include any special character!");
+    }
+    setTenantname(tenantname);
+  }
+//
 
   return (
     <Grid container spacing={1} id="personal-info-form-container">
@@ -56,8 +84,8 @@ function PersonalInfoForm(props: PropTypes) {
           type: "text",
           placeholder: "Enter your fullname",
           value: fullname,
-          setFunction: setFullname,
-          helperText: "",
+          setFunction: handleOnChangeFullname,
+          helperText: errorFullname || "",
         },
         {
           id: "email",
@@ -74,8 +102,8 @@ function PersonalInfoForm(props: PropTypes) {
           type: "text",
           placeholder: "Enter your tenant name",
           value: tenantname,
-          setFunction: setTenantname,
-          helperText: "",
+          setFunction: handleOnChangeTenantname,
+          helperText: errorTenantname || "",
         },
         // {
         //   id: "password",
@@ -144,7 +172,7 @@ function PersonalInfoForm(props: PropTypes) {
         <Button
           variant="contained"
           fullWidth
-          disabled={!checked}
+          disabled={((!checked) || (!fullname) || (errorEmail.length > 1 || !email ) || (errorTenantname.length > 1 || !tenantname) )}
           onClick={handleOnClick}
         >
           Register Account

@@ -18,12 +18,18 @@ type PropTypes = {
 
 function ResidencyInfoForm(props: PropTypes) {
   const [phone, setPhone] = useState(props.userInfo.phone || "");
+  const [isPhoneValid, setIsPhoneValid] = useState(false);
   const [address1, setAddress1] = useState(props.userInfo.address.line1 || "");
+  const [isAddress1Valid, setIsAddress1Valid] = useState(false);
   const [address2, setAddress2] = useState(props.userInfo.address.line2 || "");
   const [city, setCity] = useState(props.userInfo.address.city || "");
+  const [isCityValid, setIsCityValid] = useState(false);
   const [postal, setPostal] = useState(props.userInfo.address.postal || "");
+  const [isPostalValid, setIsPostalValid] = useState(false);
   const [state, setState] = useState(props.userInfo.address.state || "");
+  const [isStateValid, setIsStateValid] = useState(false);
   const [country, setCountry] = useState(props.userInfo.country || "none");
+  const [isCountryValid, setIsCountryValid] = useState(false);
   
   const handleOnChangePhoneInput = (value: string, country: any, e: any, formattedValue: string) => {
     let newPhone = {
@@ -31,6 +37,13 @@ function ResidencyInfoForm(props: PropTypes) {
       number: value,
       formattedNumber: formattedValue,
     }
+
+    if (newPhone.number.length >= 7 && newPhone.number.length <= 12){
+      setIsPhoneValid(true);
+    } else{
+      setIsPhoneValid(false);
+    }
+    console.log()
     setPhone(newPhone);
   }
 
@@ -49,6 +62,55 @@ function ResidencyInfoForm(props: PropTypes) {
     props.onSaveContinueClicked(userInfo);
   };
 
+//form validation functions
+  const handlePostalCode = (postal: string) => {//<-----
+    if (/^[0-9]+$/.test(postal) && postal.length >= 5 && postal.length <= 10){
+      setIsPostalValid(true);
+    } else{
+      setIsPostalValid(false);
+    }
+    setPostal(postal);
+  };
+
+  const handleCity = (city: string) => {
+    if(city){//futher conditions can be implemented
+      setIsCityValid(true);
+    } else{
+      setIsCityValid(false);
+    }
+    setCity(city);
+  };
+
+  const handleAddress1 = (address1: string) => {
+    if(address1){//futher conditions can be implemented
+      setIsAddress1Valid(true);
+    } else{
+      setIsAddress1Valid(false);
+    }
+    setAddress1(address1);
+  };
+
+  const handleState = (state: string) => {
+    const minStateName = 4;
+    if(state.length >= minStateName){
+      setIsStateValid(true);
+    } else{
+      setIsStateValid(false);
+    }
+    setState(state);
+  };
+
+  const handleCountry = (country: any) => {
+    if(country){
+      setIsCountryValid(true);
+    } else{
+      setIsCountryValid(false);
+    }
+    setCountry(country);
+  }
+//////
+
+
   // Have to register the languages you want to use
   countries.registerLocale(enLocale);
   const countryObj = countries.getNames("en", { select: "official" });
@@ -62,7 +124,7 @@ function ResidencyInfoForm(props: PropTypes) {
   return (
     <Grid container spacing={1} id="residency-info-form-container">
       <Grid item xs={12}>
-        <p className="residency-info-form-label">Phone number</p>
+        <p className="residency-info-form-label">Phone number*</p>
       </Grid>
       <Grid item xs={12}>
         <PhoneInput
@@ -86,30 +148,30 @@ function ResidencyInfoForm(props: PropTypes) {
           className="code-wallet-input-text-typography"
           id="city"
           type="text"
-          placeholder="City"
+          placeholder="City*"
           variant="outlined"
           value={city}
-          onChange={(e) => setCity(e.target.value)}
+          onChange={(e) => handleCity(e.target.value)}
           style={{width: "30%"}}
         />
         <TextField
           className="code-wallet-input-text-typography"
           id="state"
           type="text"
-          placeholder="State, Province or Region"
+          placeholder="State, Province or Region*"
           variant="outlined"
           value={state}
-          onChange={(e) => setState(e.target.value)}
+          onChange={(e) => handleState(e.target.value)}
           style={{width: "45%"}}
         />
         <TextField
           className="code-wallet-input-text-typography"
           id="postal-code"
           type="text"
-          placeholder="Postal Code"
+          placeholder="Postal Code*"
           variant="outlined"
           value={postal}
-          onChange={(e) => setPostal(e.target.value)}
+          onChange={(e) => handlePostalCode(e.target.value)}
           style={{width: "25%"}}
         />
       </Grid>
@@ -118,10 +180,10 @@ function ResidencyInfoForm(props: PropTypes) {
           className="code-wallet-input-text-typography"
           id="address-1"
           type="text"
-          placeholder="Street, Avenue, Company Name, etc."
+          placeholder="Street, Avenue, Company Name, etc.*"
           variant="outlined"
           value={address1}
-          onChange={(e) => setAddress1(e.target.value)}
+          onChange={(e) => handleAddress1(e.target.value)}
           fullWidth
         />
         <TextField
@@ -136,14 +198,14 @@ function ResidencyInfoForm(props: PropTypes) {
         />
       </Grid>
       <Grid item xs={12}>
-        <p className="residency-info-form-label">Country of residence</p>
+        <p className="residency-info-form-label">Country of residence*</p>
       </Grid>
       <Grid item xs={12}>
         <Select
           id="country"
           fullWidth
           value={country}
-          onChange={(e) => setCountry(e.target.value)}
+          onChange={(e) => handleCountry(e.target.value)}
           className="code-wallet-input-text-typography"
         >
           <MenuItem disabled value={"none"}>
@@ -162,6 +224,7 @@ function ResidencyInfoForm(props: PropTypes) {
           variant="contained"
           fullWidth
           onClick={handleOnClick}
+          disabled = {(!isPostalValid) || (!isCityValid) || (!isAddress1Valid) || (!isStateValid) || (!isCountryValid) || (!isPhoneValid)}
         >
           {"Save & Continue"}
         </Button>

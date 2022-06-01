@@ -5,6 +5,6 @@ version = 0.1
 stack_name = "serverless-saas"
 s3_bucket = "sam-bootstrap-bucket-112216be-bea2-43d7-abd6-c3dbbcd7ac1e"
 s3_prefix = "serverless-saas-bootstrap"
-region = "us-west-2"
+region = "us-east-1"
 confirm_changeset = false
 capabilities = "CAPABILITY_NAMED_IAM CAPABILITY_AUTO_EXPAND"

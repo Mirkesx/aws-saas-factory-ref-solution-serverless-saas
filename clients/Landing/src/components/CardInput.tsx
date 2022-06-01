@@ -16,10 +16,15 @@ const CARD_ELEMENT_OPTIONS = {
       iconColor: '#fa755a',
     },
   },
+  hidePostalCode: true,
 };
 
-export default function CardInput() {
+type PropTypes = {
+  onSaveContinueClicked: (event: any) => any;
+};
+
+export default function CardInput(props: PropTypes) {
   return (
-    <CardElement options={CARD_ELEMENT_OPTIONS} />
+    <CardElement options={CARD_ELEMENT_OPTIONS} onChange={props.onSaveContinueClicked} />
   );
 }
